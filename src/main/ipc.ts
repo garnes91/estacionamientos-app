@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
 import { obtenerDb } from './db'
 import { establecerUsuarioActual, obtenerUsuarioActual, requerirUsuarioActual } from './auth'
 import { obtenerEstacionamientoActual } from '../db/estacionamientos'
@@ -20,6 +20,8 @@ import { registrarIpcAdmin } from './ipcAdmin'
 /** Registra los canales IPC que el renderer usa vía window.api (ver preload.ts). */
 export function registrarIpc(): void {
   registrarIpcAdmin()
+  ipcMain.handle('app:version', () => app.getVersion())
+
   ipcMain.handle('estacionamiento:actual', () => {
     const db = obtenerDb()
     const estacionamiento = obtenerEstacionamientoActual(db)

@@ -146,6 +146,7 @@ interface ImpresoraApi {
 declare global {
   interface Window {
     api: {
+      version: () => Promise<string>
       estacionamientoActual: () => Promise<{
         id: number
         nombre: string

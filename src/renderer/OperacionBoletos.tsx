@@ -69,6 +69,7 @@ export function OperacionBoletos({
   const [ahora, setAhora] = useState(new Date())
   const [soloSerieA, setSoloSerieA] = useState(false)
   const [cambiandoSoloSerieA, setCambiandoSoloSerieA] = useState(false)
+  const [version, setVersion] = useState('')
 
   // Hora local de la computadora (no requiere ajustar zona horaria: casi
   // todas las instalaciones están en Ciudad de México, y esto sigue lo que
@@ -76,6 +77,10 @@ export function OperacionBoletos({
   useEffect(() => {
     const intervalo = setInterval(() => setAhora(new Date()), 1000)
     return () => clearInterval(intervalo)
+  }, [])
+
+  useEffect(() => {
+    window.api.version().then(setVersion)
   }, [])
 
   useEffect(() => {
@@ -427,6 +432,12 @@ export function OperacionBoletos({
           </div>
         )}
       </div>
+
+      {version && (
+        <div style={{ position: 'fixed', bottom: '0.5rem', right: '0.75rem', fontSize: '0.7rem', color: '#ccc' }}>
+          v{version}
+        </div>
+      )}
     </div>
   )
 }

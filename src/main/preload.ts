@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
 contextBridge.exposeInMainWorld('api', {
+  version: () => ipcRenderer.invoke('app:version'),
   estacionamientoActual: () => ipcRenderer.invoke('estacionamiento:actual'),
   login: (params: { nombreUsuario: string; password: string }) => ipcRenderer.invoke('auth:login', params),
   logout: () => ipcRenderer.invoke('auth:logout'),

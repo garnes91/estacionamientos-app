@@ -1,6 +1,6 @@
 {
   "name": "estacionamientos-app",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Sistema de administración de estacionamiento público (Electron + React + SQLite)",
   "main": "./out/main/index.js",
   "private": true,

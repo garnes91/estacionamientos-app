@@ -5,6 +5,7 @@ import { registrarImpresion } from './print'
 import { registrarCorreo } from './email'
 import { iniciarLatidos } from './heartbeat'
 import { iniciarActualizacionesAutomaticas } from './autoUpdater'
+import { cerrarDb } from './db'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -44,4 +45,10 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
+})
+
+// Cierra la base de datos ordenadamente (checkpoint del WAL) en vez de
+// dejar que el proceso la suelte a la fuerza al salir.
+app.on('before-quit', () => {
+  cerrarDb()
 })

@@ -14,3 +14,9 @@ export function obtenerDb(): DB {
   }
   return db
 }
+
+/** Cierra la conexión ordenadamente al salir — hace el checkpoint del WAL en vez de dejarlo a medias. */
+export function cerrarDb(): void {
+  db?.close()
+  db = null
+}

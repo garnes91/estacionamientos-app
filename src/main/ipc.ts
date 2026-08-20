@@ -14,13 +14,16 @@ import {
 } from '../db/boletos'
 import { hacerCorte, listarCortes, obtenerDetalleCorte } from '../db/cortes'
 import { alternarModoSoloSerieA, obtenerModoSoloSerieA } from '../db/modoSoloSerieA'
+import { obtenerOCrearClaveFolio } from '../db/claveCifradoFolio'
 import { registrarIpcAdmin } from './ipcAdmin'
 
 /** Registra los canales IPC que el renderer usa vía window.api (ver preload.ts). */
 export function registrarIpc(): void {
   registrarIpcAdmin()
   ipcMain.handle('estacionamiento:actual', () => {
-    return obtenerEstacionamientoActual(obtenerDb())
+    const db = obtenerDb()
+    const estacionamiento = obtenerEstacionamientoActual(db)
+    return { ...estacionamiento, claveFolio: obtenerOCrearClaveFolio(db, estacionamiento.id) }
   })
 
   ipcMain.handle('auth:login', (_evento, params: { nombreUsuario: string; password: string }) => {

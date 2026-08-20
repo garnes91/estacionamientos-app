@@ -14,6 +14,7 @@ interface BoletoListado {
 
 export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactElement {
   const [estacionamientoId, setEstacionamientoId] = useState<number | null>(null)
+  const [claveFolio, setClaveFolio] = useState('')
   const [boletos, setBoletos] = useState<BoletoListado[]>([])
   const [cobrandoId, setCobrandoId] = useState<number | null>(null)
   const [mensaje, setMensaje] = useState<string | null>(null)
@@ -26,6 +27,7 @@ export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactEl
   useEffect(() => {
     window.api.estacionamientoActual().then((e) => {
       setEstacionamientoId(e.id)
+      setClaveFolio(e.claveFolio)
       cargar(e.id).catch((err) => setError(String(err)))
     })
   }, [])
@@ -67,7 +69,7 @@ export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactEl
         </thead>
         <tbody>
           {boletos.map((b) => {
-            const folioTexto = formatearFolio(b.serie, b.folio)
+            const folioTexto = formatearFolio(b.serie, b.folio, claveFolio)
             return (
               <tr key={b.id} style={{ borderBottom: '1px solid #eee' }}>
                 <td>{folioTexto}</td>

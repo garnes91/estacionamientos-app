@@ -54,6 +54,7 @@ export function OperacionBoletos({
   const [estacionamientoId, setEstacionamientoId] = useState<number | null>(null)
   const [nombreEstacionamiento, setNombreEstacionamiento] = useState('')
   const [textoBoleto, setTextoBoleto] = useState<string | null>(null)
+  const [claveFolio, setClaveFolio] = useState('')
   const [tipos, setTipos] = useState<TipoVehiculo[]>([])
   const [tarifasPlanas, setTarifasPlanas] = useState<TarifaPlana[]>([])
   const [placa, setPlaca] = useState('')
@@ -83,6 +84,7 @@ export function OperacionBoletos({
       setEstacionamientoId(estacionamiento.id)
       setNombreEstacionamiento(estacionamiento.nombre)
       setTextoBoleto(estacionamiento.textoBoleto)
+      setClaveFolio(estacionamiento.claveFolio)
 
       const tiposVehiculo = await window.api.listarTiposVehiculo(estacionamiento.id)
       setTipos(tiposVehiculo)
@@ -203,9 +205,9 @@ export function OperacionBoletos({
 
   async function cobrarEscaneado(): Promise<void> {
     if (!folioEscaneado.trim()) return
-    const parseado = parsearFolio(folioEscaneado)
+    const parseado = parsearFolio(folioEscaneado, claveFolio)
     if (!parseado) {
-      setError(`"${folioEscaneado}" no tiene el formato de un folio (ej. A-000123)`)
+      setError(`"${folioEscaneado}" no tiene el formato de un folio (ej. 04837211)`)
       return
     }
     await cobrarFolio(parseado)
@@ -241,7 +243,7 @@ export function OperacionBoletos({
         // onKeyDown (más abajo) ya se encarga de cobrar — hacerlo también
         // aquí duplicaría el cobro.
         if (transcurrido < UMBRAL_ESCANEO_MS && document.activeElement !== folioInputRef.current) {
-          const parseado = parsearFolio(buffer)
+          const parseado = parsearFolio(buffer, claveFolio)
           if (parseado) cobrarFolio(parseado, true)
         }
         return
@@ -260,7 +262,7 @@ export function OperacionBoletos({
     }
     window.addEventListener('keydown', alTecladoGlobal)
     return () => window.removeEventListener('keydown', alTecladoGlobal)
-  }, [estacionamientoId])
+  }, [estacionamientoId, claveFolio])
 
   async function cerrarSesion(): Promise<void> {
     await window.api.logout()
@@ -278,127 +280,152 @@ export function OperacionBoletos({
   }
 
   return (
-    <div style={{ fontFamily: 'sans-serif', padding: '2rem', maxWidth: 620 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <h1 style={{ margin: 0 }}>{nombreEstacionamiento || 'Sistema de Estacionamientos'}</h1>
-        <div style={{ textAlign: 'right', fontSize: '0.85rem', color: '#666' }}>
-          <div>
-            {usuario.nombreCompleto} · {usuario.rol}
-          </div>
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem', justifyContent: 'flex-end' }}>
-            {onAbrirConfiguracion && <button onClick={onAbrirConfiguracion}>Configuración</button>}
-            <button onClick={cerrarSesion}>Cerrar sesión</button>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ textAlign: 'center', margin: '0.5rem 0 1.5rem' }}>
-        <div style={{ fontSize: '3rem', fontWeight: 'bold', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
-          {ahora.toLocaleTimeString('es-MX')}
-        </div>
-        <div style={{ fontSize: '1rem', color: '#666', textTransform: 'capitalize' }}>
-          {ahora.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-        </div>
-      </div>
-
-      {resumen && (
-        <div style={{ display: 'flex', gap: '1rem', margin: '1rem 0' }}>
-          <div style={{ flex: 1, background: '#f4f4f4', borderRadius: 6, padding: '0.75rem 1rem' }}>
-            <div style={{ fontSize: '0.75rem', color: '#666' }}>Entradas desde el último corte</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{resumen.entradasDesdeUltimoCorte}</div>
-          </div>
-          <div style={{ flex: 1, background: '#f4f4f4', borderRadius: 6, padding: '0.75rem 1rem' }}>
-            <div style={{ fontSize: '0.75rem', color: '#666' }}>Actualmente dentro</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{resumen.actualmenteDentro}</div>
-          </div>
-        </div>
-      )}
-
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', alignItems: 'center' }}>
-        <button onClick={onVerBoletosAbiertos}>Ver boletos abiertos</button>
-        <button onClick={onVerCorte}>Corte de caja</button>
-        {soloSerieA && (
-          <span
-            title="Solo serie A activo — Ctrl+Shift+A para restaurar las demás series"
-            style={{ marginLeft: 'auto', fontSize: '1.4rem', color: '#c98a00', cursor: 'default' }}
-          >
-            ⚠️
-          </span>
-        )}
-      </div>
-
-      <div style={{ margin: '1rem 0' }}>
-        <input
-          ref={placaRef}
-          type="text"
-          placeholder="Placa (opcional)"
-          value={placa}
-          onChange={(e) => setPlaca(e.target.value.toUpperCase())}
-          style={{
-            textTransform: 'uppercase',
-            fontSize: '1rem',
-            padding: '0.4rem',
-            width: '100%',
-            boxSizing: 'border-box'
-          }}
-        />
-      </div>
-
-      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-        {tipos.map((t, i) => {
-          const planasDelTipo = tarifasPlanas.filter((p) => p.tipoVehiculoId === t.id)
-          return (
-            <div key={t.id} style={{ flex: 1, minWidth: 140, display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <button onClick={() => emitir(t.id)} disabled={cargando} style={{ padding: '1rem 0.5rem', fontSize: '1rem', lineHeight: 1.4 }}>
-                F{i + 1}
-                <br />
-                {t.nombre}
-              </button>
-              {planasDelTipo.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => emitir(t.id, p.id)}
-                  disabled={cargando}
-                  style={{ fontSize: '0.8rem', padding: '0.3rem' }}
-                >
-                  {p.nombre} (${p.precioFijo}/{p.horasIncluidas}h)
-                </button>
-              ))}
+    <div style={{ fontFamily: 'sans-serif', padding: '2rem', display: 'flex', gap: '2rem', alignItems: 'flex-start' }}>
+      <div style={{ maxWidth: 620, flex: '1 1 620px', minWidth: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <h1 style={{ margin: 0 }}>{nombreEstacionamiento || 'Sistema de Estacionamientos'}</h1>
+          <div style={{ textAlign: 'right', fontSize: '0.85rem', color: '#666' }}>
+            <div>
+              {usuario.nombreCompleto} · {usuario.rol}
             </div>
-          )
-        })}
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem', justifyContent: 'flex-end' }}>
+              {onAbrirConfiguracion && <button onClick={onAbrirConfiguracion}>Configuración</button>}
+              <button onClick={cerrarSesion}>Cerrar sesión</button>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ textAlign: 'center', margin: '0.5rem 0 1.5rem' }}>
+          <div style={{ fontSize: '3rem', fontWeight: 'bold', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+            {ahora.toLocaleTimeString('es-MX')}
+          </div>
+          <div style={{ fontSize: '1rem', color: '#666', textTransform: 'capitalize' }}>
+            {ahora.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </div>
+        </div>
+
+        {resumen && (
+          <div style={{ display: 'flex', gap: '1rem', margin: '1rem 0' }}>
+            <div style={{ flex: 1, background: '#f4f4f4', borderRadius: 6, padding: '0.75rem 1rem' }}>
+              <div style={{ fontSize: '0.75rem', color: '#666' }}>Entradas desde el último corte</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{resumen.entradasDesdeUltimoCorte}</div>
+            </div>
+            <div style={{ flex: 1, background: '#f4f4f4', borderRadius: 6, padding: '0.75rem 1rem' }}>
+              <div style={{ fontSize: '0.75rem', color: '#666' }}>Actualmente dentro</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{resumen.actualmenteDentro}</div>
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', alignItems: 'center' }}>
+          <button onClick={onVerBoletosAbiertos}>Ver boletos abiertos</button>
+          <button onClick={onVerCorte}>Corte de caja</button>
+          {soloSerieA && (
+            <span
+              title="Solo serie A activo — Ctrl+Shift+A para restaurar las demás series"
+              style={{ marginLeft: 'auto', fontSize: '1.4rem', color: '#c98a00', cursor: 'default' }}
+            >
+              ⚠️
+            </span>
+          )}
+        </div>
+
+        <div style={{ margin: '1rem 0' }}>
+          <input
+            ref={placaRef}
+            type="text"
+            placeholder="Placa (opcional)"
+            value={placa}
+            onChange={(e) => setPlaca(e.target.value.toUpperCase())}
+            style={{
+              textTransform: 'uppercase',
+              fontSize: '1rem',
+              padding: '0.4rem',
+              width: '100%',
+              boxSizing: 'border-box'
+            }}
+          />
+        </div>
+
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {tipos.map((t, i) => {
+            const planasDelTipo = tarifasPlanas.filter((p) => p.tipoVehiculoId === t.id)
+            return (
+              <div key={t.id} style={{ flex: 1, minWidth: 140, display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <button onClick={() => emitir(t.id)} disabled={cargando} style={{ padding: '1rem 0.5rem', fontSize: '1rem', lineHeight: 1.4 }}>
+                  F{i + 1}
+                  <br />
+                  {t.nombre}
+                </button>
+                {planasDelTipo.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => emitir(t.id, p.id)}
+                    disabled={cargando}
+                    style={{ fontSize: '0.8rem', padding: '0.3rem' }}
+                  >
+                    {p.nombre} (${p.precioFijo}/{p.horasIncluidas}h)
+                  </button>
+                ))}
+              </div>
+            )
+          })}
+        </div>
+
+        {error && <p style={{ color: 'crimson' }}>{error}</p>}
+
+        {ultimoCobro && (
+          <p style={{ background: '#eefbea', padding: '0.5rem 0.75rem', borderRadius: 4 }}>
+            Boleto {formatearFolio(ultimoCobro.serie, ultimoCobro.folio, claveFolio)} cobrado: ${ultimoCobro.monto.toFixed(2)} (
+            {ultimoCobro.minutosTotales} min, tarifa {ultimoCobro.tipoCobro})
+          </p>
+        )}
+
+        <h2>Cobrar por folio escaneado (salida)</h2>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', margin: '0.5rem 0' }}>
+          <input
+            ref={folioInputRef}
+            type="text"
+            placeholder="Escanear o escribir folio, ej. 04837211"
+            value={folioEscaneado}
+            onChange={(e) => setFolioEscaneado(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && cobrarEscaneado()}
+            style={{ flex: 1 }}
+          />
+          <button onClick={cobrarEscaneado} disabled={cobrandoEscaneo || !folioEscaneado.trim()}>
+            Cobrar
+          </button>
+        </div>
       </div>
 
-      {error && <p style={{ color: 'crimson' }}>{error}</p>}
-
-      {ultimoEmitido && (
-        <div style={{ margin: '1rem 0', display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
-          <BoletoImprimible datos={ultimoEmitido} />
-          <button onClick={imprimir}>Imprimir último boleto</button>
+      <div style={{ width: 340, flex: '0 0 340px' }}>
+        <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#999', marginBottom: '0.5rem' }}>
+          Último boleto
         </div>
-      )}
-
-      {ultimoCobro && (
-        <p style={{ background: '#eefbea', padding: '0.5rem 0.75rem', borderRadius: 4 }}>
-          Boleto {formatearFolio(ultimoCobro.serie, ultimoCobro.folio)} cobrado: ${ultimoCobro.monto.toFixed(2)} (
-          {ultimoCobro.minutosTotales} min, tarifa {ultimoCobro.tipoCobro})
-        </p>
-      )}
-
-      <h2>Cobrar por folio escaneado (salida)</h2>
-      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', margin: '0.5rem 0' }}>
-        <input
-          ref={folioInputRef}
-          type="text"
-          placeholder="Escanear o escribir folio, ej. A-000123"
-          value={folioEscaneado}
-          onChange={(e) => setFolioEscaneado(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && cobrarEscaneado()}
-          style={{ flex: 1 }}
-        />
-        <button onClick={cobrarEscaneado} disabled={cobrandoEscaneo || !folioEscaneado.trim()}>
-          Cobrar
-        </button>
+        {ultimoEmitido ? (
+          <>
+            <div style={{ border: '1px solid #e2e0da', borderRadius: 8, padding: '1rem', boxSizing: 'border-box' }}>
+              <BoletoImprimible datos={ultimoEmitido} claveFolio={claveFolio} />
+            </div>
+            <button onClick={imprimir} style={{ marginTop: '0.75rem', width: '100%', padding: '0.5rem', boxSizing: 'border-box' }}>
+              Imprimir último boleto
+            </button>
+          </>
+        ) : (
+          <div
+            style={{
+              border: '1px dashed #ccc',
+              borderRadius: 8,
+              padding: '3rem 1rem',
+              textAlign: 'center',
+              color: '#999',
+              fontSize: '0.85rem',
+              boxSizing: 'border-box'
+            }}
+          >
+            Aquí va a aparecer el boleto en cuanto emitas uno con F1, F2 o F3.
+          </div>
+        )}
       </div>
     </div>
   )

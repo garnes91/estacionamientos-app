@@ -146,7 +146,12 @@ interface ImpresoraApi {
 declare global {
   interface Window {
     api: {
-      estacionamientoActual: () => Promise<{ id: number; nombre: string; textoBoleto: string | null }>
+      estacionamientoActual: () => Promise<{
+        id: number
+        nombre: string
+        textoBoleto: string | null
+        claveFolio: string
+      }>
       login: (params: { nombreUsuario: string; password: string }) => Promise<UsuarioApi>
       logout: () => Promise<void>
       usuarioActual: () => Promise<UsuarioApi | null>

@@ -37,7 +37,7 @@ function formatearFecha(iso: string): string {
   return new Date(iso).toLocaleString()
 }
 
-function TablaBoletos({ boletos }: { boletos: DetalleCorteBoleto[] }): ReactElement {
+function TablaBoletos({ boletos, claveFolio }: { boletos: DetalleCorteBoleto[]; claveFolio: string }): ReactElement {
   return (
     <table cellPadding={4} style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.9rem' }}>
       <thead>
@@ -52,7 +52,7 @@ function TablaBoletos({ boletos }: { boletos: DetalleCorteBoleto[] }): ReactElem
       <tbody>
         {boletos.map((b) => (
           <tr key={b.id} style={{ borderBottom: '1px solid #eee' }}>
-            <td>{formatearFolio(b.serie, b.folio)}</td>
+            <td>{formatearFolio(b.serie, b.folio, claveFolio)}</td>
             <td>{b.tipoVehiculo}</td>
             <td>{formatearFecha(b.horaEntrada)}</td>
             <td>{formatearFecha(b.horaSalida)}</td>
@@ -73,6 +73,7 @@ export function CorteCaja({
 }): ReactElement {
   const [estacionamientoId, setEstacionamientoId] = useState<number | null>(null)
   const [nombreEstacionamiento, setNombreEstacionamiento] = useState('')
+  const [claveFolio, setClaveFolio] = useState('')
   const [historial, setHistorial] = useState<Corte[]>([])
   const [detalleActual, setDetalleActual] = useState<DetalleCorte | null>(null)
   const [generando, setGenerando] = useState(false)
@@ -92,6 +93,7 @@ export function CorteCaja({
     window.api.estacionamientoActual().then((e) => {
       setEstacionamientoId(e.id)
       setNombreEstacionamiento(e.nombre)
+      setClaveFolio(e.claveFolio)
       cargarHistorial(e.id).catch((err) => setError(String(err)))
     })
   }, [])
@@ -228,7 +230,7 @@ export function CorteCaja({
                 <p style={{ fontWeight: 'bold', marginBottom: '0.25rem' }}>
                   Serie {s.serie} — {s.totalBoletos} boletos, ${s.totalMonto.toFixed(2)}
                 </p>
-                <TablaBoletos boletos={s.boletos} />
+                <TablaBoletos boletos={s.boletos} claveFolio={claveFolio} />
               </div>
             ))}
 
@@ -255,7 +257,7 @@ export function CorteCaja({
                   Periodo: {formatearFecha(detalleActual.desde)} — {formatearFecha(detalleActual.hasta)}
                 </p>
                 <p>Generado por: {nombreUsuario}</p>
-                <TablaBoletos boletos={s.boletos} />
+                <TablaBoletos boletos={s.boletos} claveFolio={claveFolio} />
                 <p style={{ fontWeight: 'bold', borderTop: '2px solid #333', paddingTop: '0.5rem' }}>
                   Total serie {s.serie}: {s.totalBoletos} boletos, ${s.totalMonto.toFixed(2)}
                 </p>

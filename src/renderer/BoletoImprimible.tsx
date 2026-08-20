@@ -22,9 +22,15 @@ export interface DatosBoletoImprimible {
  * src/main/print.ts), tomando el outerHTML de este elemento (id
  * "boleto-imprimible") ya renderizado.
  */
-export function BoletoImprimible({ datos }: { datos: DatosBoletoImprimible }): ReactElement {
+export function BoletoImprimible({
+  datos,
+  claveFolio
+}: {
+  datos: DatosBoletoImprimible
+  claveFolio: string
+}): ReactElement {
   const svgRef = useRef<SVGSVGElement>(null)
-  const textoFolio = formatearFolio(datos.serie, datos.folio)
+  const textoFolio = formatearFolio(datos.serie, datos.folio, claveFolio)
   const [errorBarcode, setErrorBarcode] = useState<string | null>(null)
   const [esquemaBN, setEsquemaBN] = useState<string | null>(null)
 

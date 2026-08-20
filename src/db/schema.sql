@@ -256,3 +256,17 @@ CREATE TABLE IF NOT EXISTS estado_solo_serie_a (
   series_respaldo     TEXT,
   UNIQUE (estacionamiento_id)
 );
+
+-- ============================================================
+-- Clave del cifrado Feistel del folio impreso/escaneado (ver
+-- src/logic/folioCifrado.ts) — para que un cliente no pueda inferir el
+-- volumen de boletos comparando su folio con el de otro. Se genera sola la
+-- primera vez que hace falta y NUNCA debe cambiar después: si cambiara,
+-- los tickets ya impresos dejarían de poder escanearse correctamente.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS clave_cifrado_folio (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  estacionamiento_id  INTEGER NOT NULL REFERENCES estacionamientos(id),
+  clave               TEXT NOT NULL,
+  UNIQUE (estacionamiento_id)
+);

@@ -147,6 +147,10 @@ declare global {
   interface Window {
     api: {
       version: () => Promise<string>
+      actualizaciones: {
+        estado: () => Promise<string | null>
+        alEstarLista: (callback: (version: string) => void) => () => void
+      }
       estacionamientoActual: () => Promise<{
         id: number
         nombre: string

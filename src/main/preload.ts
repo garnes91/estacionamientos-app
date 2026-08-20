@@ -2,6 +2,14 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 contextBridge.exposeInMainWorld('api', {
   version: () => ipcRenderer.invoke('app:version'),
+  actualizaciones: {
+    estado: () => ipcRenderer.invoke('actualizaciones:estado'),
+    alEstarLista: (callback: (version: string) => void) => {
+      const listener = (_evento: unknown, version: string): void => callback(version)
+      ipcRenderer.on('actualizaciones:lista', listener)
+      return () => ipcRenderer.removeListener('actualizaciones:lista', listener)
+    }
+  },
   estacionamientoActual: () => ipcRenderer.invoke('estacionamiento:actual'),
   login: (params: { nombreUsuario: string; password: string }) => ipcRenderer.invoke('auth:login', params),
   logout: () => ipcRenderer.invoke('auth:logout'),

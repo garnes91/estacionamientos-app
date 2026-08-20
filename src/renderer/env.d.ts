@@ -149,6 +149,7 @@ declare global {
       version: () => Promise<string>
       actualizaciones: {
         estado: () => Promise<string | null>
+        instalar: () => Promise<void>
         alEstarLista: (callback: (version: string) => void) => () => void
       }
       estacionamientoActual: () => Promise<{

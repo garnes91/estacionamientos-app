@@ -4,35 +4,35 @@ import { autoUpdater } from 'electron-updater'
 const INTERVALO_MS = 4 * 60 * 60 * 1000 // cada 4 horas
 
 // Versión ya descargada y lista para instalar (null si no hay ninguna
-// pendiente) — se avisa al renderer para mostrar un banner informativo,
-// pero la instalación en sí sigue siendo automática, no depende de que
-// nadie vea ni haga clic en nada.
+// pendiente) — se avisa al renderer para mostrar un banner con un botón.
 let actualizacionLista: string | null = null
 
 /**
- * Revisa, descarga e instala actualizaciones solas, sin ningún clic del
- * operador — se publican como GitHub Releases de este mismo repo (ver
- * "publish" en package.json y el script release:win). Se descarga en
- * segundo plano y se instala sola la próxima vez que la app se cierre
- * normalmente (autoInstallOnAppQuit, comportamiento por defecto de
- * electron-updater) — nunca interrumpe un turno en curso. Solo corre en
- * la app empaquetada: en desarrollo (electron-vite dev/preview) no hay
- * instalador que actualizar.
+ * Revisa y descarga actualizaciones solas en segundo plano — se publican
+ * como GitHub Releases de este mismo repo (ver "publish" en package.json y
+ * el script release:win). La instalación NO es automática: instalar en
+ * silencio y solo al cerrar (autoInstallOnAppQuit) resultó poco confiable
+ * en la práctica — Windows a veces no soltaba el proceso viejo a tiempo y
+ * la instalación silenciosa se rendía ("Fallo al desinstalar archivos
+ * antiguos"). En vez de eso, el banner deja que el operador decida cuándo
+ * dar el clic para actualizar; ahí se corre el instalador de Windows
+ * normal (no silencioso), que si hace falta cerrar algo lo pide de forma
+ * visible en vez de rendirse solo. Solo corre en la app empaquetada: en
+ * desarrollo (electron-vite dev/preview) no hay instalador que actualizar.
  */
 export function iniciarActualizacionesAutomaticas(): void {
   ipcMain.handle('actualizaciones:estado', () => actualizacionLista)
 
   if (!app.isPackaged) return
 
+  ipcMain.handle('actualizaciones:instalar', () => {
+    // isSilent=false: instalador visible, no el modo silencioso que fallaba.
+    // isForceRunAfter=true: vuelve a abrir la app sola al terminar.
+    autoUpdater.quitAndInstall(false, true)
+  })
+
   autoUpdater.autoDownload = true
-  autoUpdater.autoInstallOnAppQuit = true
-  // Los parches diferenciales (bajar solo lo que cambió y aplicarlo encima
-  // del instalado) fallan de forma reproducible al reemplazar archivos en
-  // este tipo de instalación NSIS por usuario — "Fallo al desinstalar
-  // archivos antiguos". Bajar siempre el instalador completo es más lento
-  // pero más confiable, y este es un desktop app de instalación única, no algo
-  // que se actualice tan seguido como para que el ahorro de ancho de banda
-  // valga la pena el riesgo.
+  autoUpdater.autoInstallOnAppQuit = false
   autoUpdater.disableDifferentialDownload = true
 
   autoUpdater.on('error', (error) => {

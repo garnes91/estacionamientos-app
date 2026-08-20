@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('api', {
   version: () => ipcRenderer.invoke('app:version'),
   actualizaciones: {
     estado: () => ipcRenderer.invoke('actualizaciones:estado'),
+    instalar: () => ipcRenderer.invoke('actualizaciones:instalar'),
     alEstarLista: (callback: (version: string) => void) => {
       const listener = (_evento: unknown, version: string): void => callback(version)
       ipcRenderer.on('actualizaciones:lista', listener)

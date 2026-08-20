@@ -22,12 +22,17 @@ function App(): ReactElement {
       .catch(() => setUsuario(null))
   }, [])
 
-  // La instalación en sí sigue siendo automática (al cerrar la app) — esto
-  // solo avisa que ya está descargada, para que no parezca que no pasó nada.
+  // La descarga es automática en segundo plano; instalar no — el operador
+  // decide cuándo, con un clic, y ahí corre el instalador normal de
+  // Windows (visible), no uno silencioso que resultó poco confiable.
   useEffect(() => {
     window.api.actualizaciones.estado().then(setActualizacionLista)
     return window.api.actualizaciones.alEstarLista(setActualizacionLista)
   }, [])
+
+  function instalarActualizacion(): void {
+    window.api.actualizaciones.instalar()
+  }
 
   function cerrarSesion(): void {
     setUsuario(null)
@@ -81,12 +86,18 @@ function App(): ReactElement {
             background: '#eef4ff',
             color: '#1a3d7c',
             padding: '0.5rem 1rem',
-            textAlign: 'center',
+            display: 'flex',
+            gap: '0.75rem',
+            alignItems: 'center',
+            justifyContent: 'center',
             fontSize: '0.85rem',
             borderTop: '1px solid #c8d9f5'
           }}
         >
-          Actualización {actualizacionLista} lista — se instalará sola la próxima vez que cierres la app.
+          <span>Actualización {actualizacionLista} lista.</span>
+          <button onClick={instalarActualizacion} style={{ padding: '0.25rem 0.75rem' }}>
+            Actualizar ahora
+          </button>
         </div>
       )}
     </>

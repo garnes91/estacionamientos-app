@@ -8,3 +8,16 @@
 ; igual de seguro, solo sin este chequeo previo que está fallando mal.
 !macro customCheckAppRunning
 !macroend
+
+; De forma parecida, si al actualizar el instalador nuevo intenta correr el
+; desinstalador de la versión anterior y ese desinstalador falla (por el
+; mismo tipo de detección equivocada, o cualquier otra razón), el
+; instalador por defecto se rinde con "Fallo al desinstalar archivos
+; antiguos". No hace falta: los archivos de la versión nueva se van a
+; sobrescribir directo de todas formas — así que se ignora el resultado del
+; desinstalador viejo y se sigue adelante con la instalación.
+!macro customUnInstallCheck
+!macroend
+
+!macro customUnInstallCheckCurrentUser
+!macroend

@@ -42,7 +42,8 @@
     "publish": {
       "provider": "github",
       "owner": "garnes91",
-      "repo": "estacionamientos-app"
+      "repo": "estacionamientos-app",
+      "releaseType": "release"
     }
   },
   "dependencies": {

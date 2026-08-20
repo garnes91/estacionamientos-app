@@ -4,6 +4,7 @@ import { registrarIpc } from './ipc'
 import { registrarImpresion } from './print'
 import { registrarCorreo } from './email'
 import { iniciarLatidos } from './heartbeat'
+import { iniciarActualizacionesAutomaticas } from './autoUpdater'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -33,6 +34,7 @@ app.whenReady().then(() => {
   registrarImpresion()
   registrarCorreo()
   iniciarLatidos()
+  iniciarActualizacionesAutomaticas()
   createWindow()
 
   app.on('activate', () => {

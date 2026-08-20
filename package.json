@@ -21,6 +21,7 @@
   "build": {
     "appId": "com.estacionamientos.app",
     "productName": "Estacionamientos",
+    "npmRebuild": false,
     "files": [
       "out/**/*"
     ],
@@ -28,7 +29,9 @@
       "target": "dmg"
     },
     "win": {
-      "target": "nsis"
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ]
     }
   },
   "dependencies": {

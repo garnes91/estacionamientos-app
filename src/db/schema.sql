@@ -240,3 +240,19 @@ CREATE TABLE IF NOT EXISTS configuracion_impresion (
   impresora_reporte   TEXT,
   UNIQUE (estacionamiento_id)
 );
+
+-- ============================================================
+-- Modo "solo serie A" — atajo de emergencia (Ctrl+Shift+A, cualquier
+-- usuario) para desactivar de golpe todas las series salvo A, ej. si se
+-- acabaron los boletos físicos de la serie B a medio turno. series_respaldo
+-- guarda (en JSON) los ids de las series que estaban activas antes de
+-- forzar el modo, para poder restaurar exactamente ese estado al apagarlo
+-- en vez de reactivar todo a ciegas.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS estado_solo_serie_a (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  estacionamiento_id  INTEGER NOT NULL REFERENCES estacionamientos(id),
+  activo              INTEGER NOT NULL DEFAULT 0 CHECK (activo IN (0, 1)),
+  series_respaldo     TEXT,
+  UNIQUE (estacionamiento_id)
+);

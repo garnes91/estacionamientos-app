@@ -13,6 +13,7 @@ import {
   obtenerResumen
 } from '../db/boletos'
 import { hacerCorte, listarCortes, obtenerDetalleCorte } from '../db/cortes'
+import { alternarModoSoloSerieA, obtenerModoSoloSerieA } from '../db/modoSoloSerieA'
 import { registrarIpcAdmin } from './ipcAdmin'
 
 /** Registra los canales IPC que el renderer usa vía window.api (ver preload.ts). */
@@ -130,5 +131,15 @@ export function registrarIpc(): void {
   ipcMain.handle('cortes:detalle', (_evento, corteId: number) => {
     requerirUsuarioActual()
     return obtenerDetalleCorte(obtenerDb(), corteId)
+  })
+
+  ipcMain.handle('modoSoloSerieA:estado', (_evento, estacionamientoId: number) => {
+    requerirUsuarioActual()
+    return obtenerModoSoloSerieA(obtenerDb(), estacionamientoId)
+  })
+
+  ipcMain.handle('modoSoloSerieA:alternar', (_evento, estacionamientoId: number) => {
+    requerirUsuarioActual()
+    return alternarModoSoloSerieA(obtenerDb(), estacionamientoId)
   })
 }

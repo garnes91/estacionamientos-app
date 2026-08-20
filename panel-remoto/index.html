@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Configuración remota de estacionamientos</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-0: #f4f3f0;
+    --surface-1: #ffffff;
+    --border: #e2e0da;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #85837c;
+    --accent: #2a78d6;
+    --status-good: #0ca30c;
+    --status-warning: #fab219;
+    --status-critical: #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --surface-0: #111110;
+      --surface-1: #1a1a19;
+      --border: #333230;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted: #8b8a82;
+      --accent: #3987e5;
+      --status-good: #0ca30c;
+      --status-warning: #fab219;
+      --status-critical: #e66767;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--surface-0);
+    color: var(--text-primary);
+    padding: 1.5rem;
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    max-width: 760px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  h1 { font-size: 1.3rem; margin: 0; }
+  h2 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; }
+  h3 { font-size: 0.9rem; margin: 1rem 0 0.4rem; color: var(--text-secondary); }
+  #estado-conexion { font-size: 0.85rem; color: var(--text-muted); }
+  button {
+    font: inherit;
+    padding: 0.4rem 0.75rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-1);
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+  button.primario {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  main {
+    max-width: 760px;
+    margin: 0 auto;
+  }
+  .tarjeta {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+  }
+  label { display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.2rem; }
+  input[type="text"], input[type="number"], textarea, select {
+    width: 100%;
+    font: inherit;
+    padding: 0.4rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-0);
+    color: var(--text-primary);
+    box-sizing: border-box;
+  }
+  textarea { min-height: 70px; font-family: monospace; }
+  .fila { display: flex; gap: 1rem; align-items: flex-end; margin-bottom: 0.75rem; flex-wrap: wrap; }
+  .fila > div { flex: 1; min-width: 140px; }
+  .checkbox-fila { display: flex; align-items: center; gap: 0.4rem; }
+  .checkbox-fila label { margin: 0; }
+  .grid-precios {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 0.4rem;
+    margin: 0.5rem 0;
+  }
+  .grid-precios label { font-size: 0.65rem; text-align: center; }
+  .grid-precios input { text-align: center; padding: 0.25rem; }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.75rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .badge-good { background: color-mix(in srgb, var(--status-good) 15%, transparent); color: var(--status-good); }
+  .badge-warning { background: color-mix(in srgb, var(--status-warning) 20%, transparent); color: #8a6200; }
+  @media (prefers-color-scheme: dark) {
+    .badge-warning { color: var(--status-warning); }
+  }
+  .tarjeta-estacionamiento {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+  }
+  .tarjeta-estacionamiento:hover { border-color: var(--accent); }
+  .hint { color: var(--text-muted); font-size: 0.78rem; }
+  #config, #vacio { max-width: 460px; margin: 3rem auto; text-align: left; color: var(--text-secondary); }
+  #config-error { color: var(--status-critical); font-size: 0.85rem; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Configuración remota</h1>
+  <div style="display:flex; align-items:center; gap:0.75rem;">
+    <span id="estado-conexion">Conectando…</span>
+    <button id="btn-config">Configuración de Firebase</button>
+  </div>
+</header>
+
+<main>
+  <div id="config" style="display:none;">
+    <h2 style="margin-top:0;">Configuración de Firebase</h2>
+    <p>Pega aquí el mismo objeto <code>firebaseConfig</code> que usaste para el dashboard de monitoreo (Consola de
+      Firebase → Configuración del proyecto → Tus apps).</p>
+    <textarea id="config-texto" placeholder='{"apiKey": "...", "authDomain": "...", "projectId": "...", ...}'></textarea>
+    <p id="config-error"></p>
+    <button class="primario" id="btn-guardar-config">Guardar y conectar</button>
+  </div>
+
+  <div id="lista-estacionamientos" style="display:none;">
+    <h2 style="margin-top:0;">Elige un estacionamiento</h2>
+    <div id="tarjetas-estacionamientos"></div>
+    <p id="vacio-estacionamientos" class="hint" style="display:none;">Todavía no ha llegado ningún latido de ningún
+      estacionamiento — abre la app con el monitoreo habilitado y espera un minuto.</p>
+  </div>
+
+  <div id="editor" style="display:none;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2 style="margin-top:0;" id="editor-titulo"></h2>
+      <button id="btn-cambiar-estacionamiento">Cambiar de estacionamiento</button>
+    </div>
+    <p id="estado-aplicacion" class="hint"></p>
+    <div id="editor-contenido"></div>
+    <button class="primario" id="btn-guardar-cambios" style="margin-top:1rem;">Guardar cambios (se aplican en la
+      app en menos de 1 minuto)</button>
+  </div>
+</main>
+
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js'
+  import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js'
+  import { getFirestore, doc, collection, onSnapshot, updateDoc } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js'
+
+  const CLAVE_LOCAL = 'estacionamientos-panel-config'
+
+  const elEstadoConexion = document.getElementById('estado-conexion')
+  const elConfig = document.getElementById('config')
+  const elConfigTexto = document.getElementById('config-texto')
+  const elConfigError = document.getElementById('config-error')
+  const elListaEstacionamientos = document.getElementById('lista-estacionamientos')
+  const elTarjetasEstacionamientos = document.getElementById('tarjetas-estacionamientos')
+  const elVacioEstacionamientos = document.getElementById('vacio-estacionamientos')
+  const elEditor = document.getElementById('editor')
+  const elEditorTitulo = document.getElementById('editor-titulo')
+  const elEditorContenido = document.getElementById('editor-contenido')
+  const elEstadoAplicacion = document.getElementById('estado-aplicacion')
+  const elBtnGuardarCambios = document.getElementById('btn-guardar-cambios')
+
+  // Igual que en dashboard/index.html: la consola de Firebase muestra el
+  // config como literal de JS (claves sin comillas), no JSON estricto.
+  function interpretarConfigFirebase(texto) {
+    const limpio = texto.trim()
+    try { return JSON.parse(limpio) } catch {}
+    const envuelto = limpio.startsWith('{') ? limpio : `{${limpio}}`
+    return Function(`"use strict"; return (${envuelto});`)()
+  }
+
+  document.getElementById('btn-config').addEventListener('click', () => {
+    elConfigTexto.value = localStorage.getItem(CLAVE_LOCAL) || ''
+    elConfig.style.display = 'block'
+    elListaEstacionamientos.style.display = 'none'
+    elEditor.style.display = 'none'
+  })
+
+  document.getElementById('btn-guardar-config').addEventListener('click', () => {
+    try {
+      const config = interpretarConfigFirebase(elConfigTexto.value)
+      if (!config.apiKey || !config.projectId) throw new Error('Falta apiKey o projectId')
+      localStorage.setItem(CLAVE_LOCAL, JSON.stringify(config))
+      location.reload()
+    } catch (e) {
+      elConfigError.textContent = `No se pudo leer esa configuración (${e.message}) — copia el bloque tal cual desde la consola de Firebase.`
+    }
+  })
+
+  let db = null
+  let slugActual = null
+  let desuscribirEditor = null
+  let ignorarProximoSnapshot = false
+
+  function mostrarListaEstacionamientos() {
+    if (desuscribirEditor) { desuscribirEditor(); desuscribirEditor = null }
+    slugActual = null
+    elEditor.style.display = 'none'
+    elListaEstacionamientos.style.display = 'block'
+  }
+
+  document.getElementById('btn-cambiar-estacionamiento').addEventListener('click', mostrarListaEstacionamientos)
+
+  function renderizarTarjetasEstacionamientos(snapshot) {
+    elTarjetasEstacionamientos.innerHTML = ''
+    if (snapshot.empty) {
+      elVacioEstacionamientos.style.display = 'block'
+      return
+    }
+    elVacioEstacionamientos.style.display = 'none'
+
+    const ordenados = [...snapshot.docs].sort((a, b) => (a.data().nombre || a.id).localeCompare(b.data().nombre || b.id))
+    for (const docSnap of ordenados) {
+      const datos = docSnap.data()
+      const div = document.createElement('div')
+      div.className = 'tarjeta tarjeta-estacionamiento'
+      div.innerHTML = `<span>${datos.nombre ?? docSnap.id}</span><span class="hint">${docSnap.id}</span>`
+      div.addEventListener('click', () => abrirEditor(docSnap.id))
+      elTarjetasEstacionamientos.appendChild(div)
+    }
+  }
+
+  // ---- Construcción del formulario ----
+
+  let formActual = null // el objeto que se manda como configPendiente al guardar
+  let formSucio = false // true en cuanto el usuario toca algo, para no pisar su edición con un snapshot en vivo
+
+  function crearCampoTexto(valor, onCambio, tipo = 'text') {
+    const input = document.createElement(tipo === 'textarea' ? 'textarea' : 'input')
+    if (tipo !== 'textarea') input.type = tipo
+    input.value = valor ?? ''
+    input.addEventListener('input', () => { formSucio = true; onCambio(tipo === 'number' ? Number(input.value) : input.value) })
+    return input
+  }
+
+  function crearCheckbox(valor, onCambio) {
+    const input = document.createElement('input')
+    input.type = 'checkbox'
+    input.checked = !!valor
+    input.addEventListener('change', () => { formSucio = true; onCambio(input.checked) })
+    return input
+  }
+
+  function construirFormulario(config) {
+    formActual = JSON.parse(JSON.stringify(config))
+    elEditorContenido.innerHTML = ''
+
+    // --- Estacionamiento ---
+    const tarjetaGeneral = document.createElement('div')
+    tarjetaGeneral.className = 'tarjeta'
+    tarjetaGeneral.innerHTML = '<h3 style="margin-top:0;">Estacionamiento</h3>'
+    const filaNombre = document.createElement('div')
+    filaNombre.innerHTML = '<label>Nombre</label>'
+    filaNombre.appendChild(crearCampoTexto(formActual.nombre, (v) => (formActual.nombre = v)))
+    const filaTexto = document.createElement('div')
+    filaTexto.style.marginTop = '0.75rem'
+    filaTexto.innerHTML = '<label>Texto del boleto (facturación/dirección fiscal)</label>'
+    filaTexto.appendChild(crearCampoTexto(formActual.textoBoleto, (v) => (formActual.textoBoleto = v), 'textarea'))
+    tarjetaGeneral.appendChild(filaNombre)
+    tarjetaGeneral.appendChild(filaTexto)
+    elEditorContenido.appendChild(tarjetaGeneral)
+
+    // --- Tipos de vehículo + tarifa progresiva ---
+    formActual.tiposVehiculo.forEach((tipo, i) => {
+      const tarjeta = document.createElement('div')
+      tarjeta.className = 'tarjeta'
+      tarjeta.innerHTML = `<h3 style="margin-top:0;">Tipo de vehículo</h3>`
+
+      const fila1 = document.createElement('div')
+      fila1.className = 'fila'
+      const colNombre = document.createElement('div')
+      colNombre.innerHTML = '<label>Nombre</label>'
+      colNombre.appendChild(crearCampoTexto(tipo.nombre, (v) => (formActual.tiposVehiculo[i].nombre = v)))
+      const colActivo = document.createElement('div')
+      colActivo.className = 'checkbox-fila'
+      colActivo.innerHTML = '<label>Activo</label>'
+      colActivo.appendChild(crearCheckbox(tipo.activo, (v) => (formActual.tiposVehiculo[i].activo = v)))
+      fila1.appendChild(colNombre)
+      fila1.appendChild(colActivo)
+      tarjeta.appendChild(fila1)
+
+      if (tipo.preciosPorBloque && tipo.tarifaMaximaDiaria != null) {
+        const colTope = document.createElement('div')
+        colTope.innerHTML = '<label>Tope máximo por ciclo de 24h (0 = sin tope)</label>'
+        colTope.appendChild(
+          crearCampoTexto(tipo.tarifaMaximaDiaria, (v) => (formActual.tiposVehiculo[i].tarifaMaximaDiaria = v), 'number')
+        )
+        tarjeta.appendChild(colTope)
+
+        const nota = document.createElement('p')
+        nota.className = 'hint'
+        nota.textContent = 'Precio incremental por bloque de 15 min (después del último se repite su precio).'
+        tarjeta.appendChild(nota)
+
+        const grid = document.createElement('div')
+        grid.className = 'grid-precios'
+        tipo.preciosPorBloque.forEach((precio, j) => {
+          const label = document.createElement('label')
+          label.textContent = `B${j + 1}`
+          const input = crearCampoTexto(precio, (v) => (formActual.tiposVehiculo[i].preciosPorBloque[j] = v), 'number')
+          label.appendChild(input)
+          grid.appendChild(label)
+        })
+        tarjeta.appendChild(grid)
+      } else {
+        const nota = document.createElement('p')
+        nota.className = 'hint'
+        nota.textContent = 'Este tipo no tiene una tarifa progresiva vigente — configúrala primero desde la app.'
+        tarjeta.appendChild(nota)
+      }
+
+      elEditorContenido.appendChild(tarjeta)
+    })
+
+    // --- Tarifas planas ---
+    if (formActual.tarifasPlanas.length > 0) {
+      const encabezado = document.createElement('h3')
+      encabezado.textContent = 'Tarifas planas'
+      elEditorContenido.appendChild(encabezado)
+    }
+    formActual.tarifasPlanas.forEach((plana, i) => {
+      const tarjeta = document.createElement('div')
+      tarjeta.className = 'tarjeta'
+      const fila = document.createElement('div')
+      fila.className = 'fila'
+
+      const colNombre = document.createElement('div')
+      colNombre.innerHTML = '<label>Nombre</label>'
+      colNombre.appendChild(crearCampoTexto(plana.nombre, (v) => (formActual.tarifasPlanas[i].nombre = v)))
+
+      const colPrecio = document.createElement('div')
+      colPrecio.innerHTML = '<label>Precio fijo</label>'
+      colPrecio.appendChild(crearCampoTexto(plana.precioFijo, (v) => (formActual.tarifasPlanas[i].precioFijo = v), 'number'))
+
+      const colHoras = document.createElement('div')
+      colHoras.innerHTML = '<label>Horas incluidas</label>'
+      colHoras.appendChild(
+        crearCampoTexto(plana.horasIncluidas, (v) => (formActual.tarifasPlanas[i].horasIncluidas = v), 'number')
+      )
+
+      const colActivo = document.createElement('div')
+      colActivo.className = 'checkbox-fila'
+      colActivo.innerHTML = '<label>Activa</label>'
+      colActivo.appendChild(crearCheckbox(plana.activo, (v) => (formActual.tarifasPlanas[i].activo = v)))
+
+      fila.appendChild(colNombre)
+      fila.appendChild(colPrecio)
+      fila.appendChild(colHoras)
+      fila.appendChild(colActivo)
+      tarjeta.appendChild(fila)
+      elEditorContenido.appendChild(tarjeta)
+    })
+
+    // --- Series de folio ---
+    if (formActual.series.length > 0) {
+      const encabezado = document.createElement('h3')
+      encabezado.textContent = 'Series de folio'
+      elEditorContenido.appendChild(encabezado)
+    }
+    formActual.series.forEach((serie, i) => {
+      const tarjeta = document.createElement('div')
+      tarjeta.className = 'tarjeta'
+      const fila = document.createElement('div')
+      fila.className = 'fila'
+
+      const colSerie = document.createElement('div')
+      colSerie.innerHTML = `<label>Serie</label><div style="padding:0.4rem 0; font-weight:600;">${serie.serie}</div>`
+
+      const colProporcion = document.createElement('div')
+      colProporcion.innerHTML = '<label>Proporción</label>'
+      colProporcion.appendChild(
+        crearCampoTexto(serie.proporcion, (v) => (formActual.series[i].proporcion = v), 'number')
+      )
+
+      const colFolio = document.createElement('div')
+      colFolio.innerHTML = '<label>Próximo folio</label>'
+      colFolio.appendChild(
+        crearCampoTexto(serie.siguienteNumero, (v) => (formActual.series[i].siguienteNumero = v), 'number')
+      )
+
+      const colActivo = document.createElement('div')
+      colActivo.className = 'checkbox-fila'
+      colActivo.innerHTML = '<label>Activa</label>'
+      colActivo.appendChild(crearCheckbox(serie.activo, (v) => (formActual.series[i].activo = v)))
+
+      fila.appendChild(colSerie)
+      fila.appendChild(colProporcion)
+      fila.appendChild(colFolio)
+      fila.appendChild(colActivo)
+      tarjeta.appendChild(fila)
+      elEditorContenido.appendChild(tarjeta)
+    })
+
+    formSucio = false
+  }
+
+  function formatearHora(fecha) {
+    return fecha.toLocaleTimeString('es-MX')
+  }
+
+  function actualizarEstadoAplicacion(datos) {
+    if (datos.configPendiente) {
+      elEstadoAplicacion.innerHTML = '<span class="badge badge-warning">● pendiente</span> Cambios guardados, esperando a que la app los aplique (hasta 1 minuto).'
+      elBtnGuardarCambios.disabled = true
+    } else {
+      elBtnGuardarCambios.disabled = false
+      if (datos.configAplicadaEn) {
+        const fecha = datos.configAplicadaEn.toDate ? datos.configAplicadaEn.toDate() : new Date(datos.configAplicadaEn)
+        elEstadoAplicacion.innerHTML = `<span class="badge badge-good">● aplicado</span> Último cambio aplicado a las ${formatearHora(fecha)}.`
+      } else {
+        elEstadoAplicacion.textContent = ''
+      }
+    }
+  }
+
+  function abrirEditor(slug) {
+    slugActual = slug
+    elListaEstacionamientos.style.display = 'none'
+    elEditor.style.display = 'block'
+    elEditorContenido.innerHTML = 'Cargando…'
+
+    if (desuscribirEditor) desuscribirEditor()
+    desuscribirEditor = onSnapshot(doc(db, 'estacionamientos', slug), (docSnap) => {
+      if (!docSnap.exists()) return
+      const datos = docSnap.data()
+      elEditorTitulo.textContent = datos.nombre ?? slug
+      actualizarEstadoAplicacion(datos)
+
+      if (ignorarProximoSnapshot) { ignorarProximoSnapshot = false; return }
+      // No pisar el formulario si el usuario ya está editando algo sin guardar.
+      if (formSucio) return
+      if (!datos.configActual) {
+        elEditorContenido.innerHTML = '<p class="hint">Este estacionamiento todavía no ha mandado su configuración — espera al próximo latido (hasta 1 minuto después de abrir la app).</p>'
+        return
+      }
+      construirFormulario(datos.configActual)
+    })
+  }
+
+  elBtnGuardarCambios.addEventListener('click', async () => {
+    if (!slugActual || !formActual) return
+    elBtnGuardarCambios.disabled = true
+    try {
+      ignorarProximoSnapshot = true
+      await updateDoc(doc(db, 'estacionamientos', slugActual), { configPendiente: formActual })
+      formSucio = false
+    } catch (e) {
+      alert(`No se pudo guardar: ${e.message}`)
+      elBtnGuardarCambios.disabled = false
+    }
+  })
+
+  async function iniciar() {
+    const configTexto = localStorage.getItem(CLAVE_LOCAL)
+    if (!configTexto) {
+      elConfig.style.display = 'block'
+      elEstadoConexion.textContent = 'Sin configurar'
+      return
+    }
+
+    try {
+      const firebaseConfig = JSON.parse(configTexto)
+      const app = initializeApp(firebaseConfig)
+      const auth = getAuth(app)
+      await signInAnonymously(auth)
+      db = getFirestore(app)
+
+      elEstadoConexion.textContent = 'Conectado'
+      mostrarListaEstacionamientos()
+      onSnapshot(collection(db, 'estacionamientos'), renderizarTarjetasEstacionamientos, (error) => {
+        elEstadoConexion.textContent = `Error de conexión: ${error.message}`
+      })
+    } catch (error) {
+      elEstadoConexion.textContent = 'Error de configuración'
+      elConfig.style.display = 'block'
+      elConfigTexto.value = configTexto
+      elConfigError.textContent = String(error.message || error)
+    }
+  }
+
+  iniciar()
+</script>
+
+</body>
+</html>

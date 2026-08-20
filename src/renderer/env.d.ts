@@ -168,6 +168,10 @@ declare global {
         folio: number
       }) => Promise<BoletoCerradoApi>
       resumen: (estacionamientoId: number) => Promise<ResumenApi>
+      modoSoloSerieA: {
+        estado: (estacionamientoId: number) => Promise<boolean>
+        alternar: (estacionamientoId: number) => Promise<boolean>
+      }
       cortes: {
         hacer: (estacionamientoId: number) => Promise<CorteApi>
         listar: (estacionamientoId: number) => Promise<CorteApi[]>

@@ -66,6 +66,8 @@ export function OperacionBoletos({
   const [cobrandoEscaneo, setCobrandoEscaneo] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [ahora, setAhora] = useState(new Date())
+  const [soloSerieA, setSoloSerieA] = useState(false)
+  const [cambiandoSoloSerieA, setCambiandoSoloSerieA] = useState(false)
 
   // Hora local de la computadora (no requiere ajustar zona horaria: casi
   // todas las instalaciones están en Ciudad de México, y esto sigue lo que
@@ -89,6 +91,7 @@ export function OperacionBoletos({
       setTarifasPlanas(planas.filter((p) => p.activo))
 
       setResumen(await window.api.resumen(estacionamiento.id))
+      setSoloSerieA(await window.api.modoSoloSerieA.estado(estacionamiento.id))
     }
     cargarInicial().catch((e) => setError(String(e)))
     placaRef.current?.focus()
@@ -149,6 +152,34 @@ export function OperacionBoletos({
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [tipos, cargando, estacionamientoId, placa, nombreEstacionamiento, textoBoleto, tarifasPlanas])
+
+  // Atajo de emergencia (cualquier usuario, no solo admin): Ctrl+Shift+A
+  // apaga de golpe todas las series salvo A (ej. se acabaron los boletos
+  // físicos de la serie B a medio turno) y vuelve a presionarlo restaura
+  // exactamente las series que estaban activas antes.
+  async function alternarSoloSerieA(): Promise<void> {
+    if (!estacionamientoId || cambiandoSoloSerieA) return
+    setCambiandoSoloSerieA(true)
+    setError(null)
+    try {
+      setSoloSerieA(await window.api.modoSoloSerieA.alternar(estacionamientoId))
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setCambiandoSoloSerieA(false)
+    }
+  }
+
+  useEffect(() => {
+    function onKeyDownSoloSerieA(e: KeyboardEvent): void {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault()
+        alternarSoloSerieA()
+      }
+    }
+    window.addEventListener('keydown', onKeyDownSoloSerieA)
+    return () => window.removeEventListener('keydown', onKeyDownSoloSerieA)
+  }, [estacionamientoId, cambiandoSoloSerieA])
 
   async function cobrarFolio(parseado: { serie: string; folio: number }, deEscaneoGlobal = false): Promise<void> {
     if (!estacionamientoId) return
@@ -283,9 +314,17 @@ export function OperacionBoletos({
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', alignItems: 'center' }}>
         <button onClick={onVerBoletosAbiertos}>Ver boletos abiertos</button>
         <button onClick={onVerCorte}>Corte de caja</button>
+        {soloSerieA && (
+          <span
+            title="Solo serie A activo — Ctrl+Shift+A para restaurar las demás series"
+            style={{ marginLeft: 'auto', fontSize: '1.4rem', color: '#c98a00', cursor: 'default' }}
+          >
+            ⚠️
+          </span>
+        )}
       </div>
 
       <div style={{ margin: '1rem 0' }}>

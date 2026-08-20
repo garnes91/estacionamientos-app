@@ -23,6 +23,10 @@ contextBridge.exposeInMainWorld('api', {
   cobrarBoletoPorFolio: (params: { estacionamientoId: number; serie: string; folio: number }) =>
     ipcRenderer.invoke('boletos:cobrarPorFolio', params),
   resumen: (estacionamientoId: number) => ipcRenderer.invoke('boletos:resumen', estacionamientoId),
+  modoSoloSerieA: {
+    estado: (estacionamientoId: number) => ipcRenderer.invoke('modoSoloSerieA:estado', estacionamientoId),
+    alternar: (estacionamientoId: number) => ipcRenderer.invoke('modoSoloSerieA:alternar', estacionamientoId)
+  },
   cortes: {
     hacer: (estacionamientoId: number) => ipcRenderer.invoke('cortes:hacer', estacionamientoId),
     listar: (estacionamientoId: number) => ipcRenderer.invoke('cortes:listar', estacionamientoId),

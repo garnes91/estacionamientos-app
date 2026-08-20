@@ -26,6 +26,14 @@ export function iniciarActualizacionesAutomaticas(): void {
 
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
+  // Los parches diferenciales (bajar solo lo que cambió y aplicarlo encima
+  // del instalado) fallan de forma reproducible al reemplazar archivos en
+  // este tipo de instalación NSIS por usuario — "Fallo al desinstalar
+  // archivos antiguos". Bajar siempre el instalador completo es más lento
+  // pero más confiable, y este es un desktop app de instalación única, no algo
+  // que se actualice tan seguido como para que el ahorro de ancho de banda
+  // valga la pena el riesgo.
+  autoUpdater.disableDifferentialDownload = true
 
   autoUpdater.on('error', (error) => {
     // No tumbar la app por un problema de red/GitHub — se reintenta en

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
-import { formatearFolio, parsearFolio } from '../logic/folioBarcode'
+import { parsearFolio } from '../logic/folioBarcode'
 import { BoletoImprimible, DatosBoletoImprimible } from './BoletoImprimible'
+import { ReciboCobro, DatosReciboCobro } from './ReciboCobro'
+import { ConfirmModal } from './ConfirmModal'
 
 interface TipoVehiculo {
   id: number
@@ -15,14 +17,6 @@ interface TarifaPlana {
   precioFijo: number
   horasIncluidas: number
   activo: boolean
-}
-
-interface BoletoCerrado {
-  serie: string
-  folio: number
-  minutosTotales: number
-  tipoCobro: 'regular' | 'plana'
-  monto: number
 }
 
 interface Resumen {
@@ -61,7 +55,7 @@ export function OperacionBoletos({
   const placaRef = useRef<HTMLInputElement>(null)
   const [resumen, setResumen] = useState<Resumen | null>(null)
   const [ultimoEmitido, setUltimoEmitido] = useState<DatosBoletoImprimible | null>(null)
-  const [ultimoCobro, setUltimoCobro] = useState<BoletoCerrado | null>(null)
+  const [ultimoCobro, setUltimoCobro] = useState<DatosReciboCobro | null>(null)
   const [folioEscaneado, setFolioEscaneado] = useState('')
   const [cargando, setCargando] = useState(false)
   const [cobrandoEscaneo, setCobrandoEscaneo] = useState(false)
@@ -121,6 +115,7 @@ export function OperacionBoletos({
         tarifaPlanaId
       })
       const plana = tarifaPlanaId ? tarifasPlanas.find((p) => p.id === tarifaPlanaId) : undefined
+      justoEmitidoRef.current = true
       setUltimoEmitido({
         estacionamientoNombre: nombreEstacionamiento,
         textoBoleto,
@@ -194,7 +189,18 @@ export function OperacionBoletos({
     setError(null)
     try {
       const cierre = await window.api.cobrarBoletoPorFolio({ estacionamientoId, ...parseado })
-      setUltimoCobro(cierre)
+      justoCobradoRef.current = true
+      setUltimoCobro({
+        estacionamientoNombre: nombreEstacionamiento,
+        textoBoleto,
+        serie: cierre.serie,
+        folio: cierre.folio,
+        tipoCobro: cierre.tipoCobro,
+        minutosTotales: cierre.minutosTotales,
+        monto: cierre.monto,
+        excedenteMinutos: cierre.excedenteMinutos,
+        excedenteMonto: cierre.excedenteMonto
+      })
       setFolioEscaneado('')
       // Un escaneo global puede haber dejado un carácter suelto en el campo
       // de placa (el primero de la ráfaga, antes de detectar que era un
@@ -207,6 +213,27 @@ export function OperacionBoletos({
       setCobrandoEscaneo(false)
     }
   }
+
+  async function imprimirRecibo(): Promise<void> {
+    const elemento = document.getElementById('recibo-cobro')
+    if (!elemento) return
+    try {
+      await window.api.imprimir({ html: elemento.outerHTML, tipo: 'ticket' })
+    } catch (e) {
+      setError(String(e))
+    }
+  }
+
+  // Al cobrar (no al solo mostrar un cobro ya hecho), se pregunta si se
+  // quiere imprimir el recibo. El recibo también se queda visible en el
+  // panel de la derecha por si hace falta reimprimirlo.
+  const justoCobradoRef = useRef(false)
+  const [preguntandoImprimirRecibo, setPreguntandoImprimirRecibo] = useState(false)
+  useEffect(() => {
+    if (!ultimoCobro || !justoCobradoRef.current) return
+    justoCobradoRef.current = false
+    setPreguntandoImprimirRecibo(true)
+  }, [ultimoCobro])
 
   async function cobrarEscaneado(): Promise<void> {
     if (!folioEscaneado.trim()) return
@@ -283,6 +310,15 @@ export function OperacionBoletos({
       setError(String(e))
     }
   }
+
+  // El boleto de entrada se imprime solo al emitirse — cada auto que entra
+  // necesita su ticket, no tiene sentido preguntar ni esperar un clic.
+  const justoEmitidoRef = useRef(false)
+  useEffect(() => {
+    if (!ultimoEmitido || !justoEmitidoRef.current) return
+    justoEmitidoRef.current = false
+    imprimir()
+  }, [ultimoEmitido])
 
   return (
     <div style={{ fontFamily: 'sans-serif', padding: '2rem', display: 'flex', gap: '2rem', alignItems: 'flex-start' }}>
@@ -379,13 +415,6 @@ export function OperacionBoletos({
 
         {error && <p style={{ color: 'crimson' }}>{error}</p>}
 
-        {ultimoCobro && (
-          <p style={{ background: '#eefbea', padding: '0.5rem 0.75rem', borderRadius: 4 }}>
-            Boleto {formatearFolio(ultimoCobro.serie, ultimoCobro.folio, claveFolio)} cobrado: ${ultimoCobro.monto.toFixed(2)} (
-            {ultimoCobro.minutosTotales} min, tarifa {ultimoCobro.tipoCobro})
-          </p>
-        )}
-
         <h2>Cobrar por folio escaneado (salida)</h2>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', margin: '0.5rem 0' }}>
           <input
@@ -413,7 +442,7 @@ export function OperacionBoletos({
               <BoletoImprimible datos={ultimoEmitido} claveFolio={claveFolio} />
             </div>
             <button onClick={imprimir} style={{ marginTop: '0.75rem', width: '100%', padding: '0.5rem', boxSizing: 'border-box' }}>
-              Imprimir último boleto
+              Reimprimir último boleto
             </button>
           </>
         ) : (
@@ -431,12 +460,59 @@ export function OperacionBoletos({
             Aquí va a aparecer el boleto en cuanto emitas uno con F1, F2 o F3.
           </div>
         )}
+
+        <div
+          style={{
+            fontSize: '0.75rem',
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+            color: '#999',
+            margin: '1.5rem 0 0.5rem'
+          }}
+        >
+          Último cobro
+        </div>
+        {ultimoCobro ? (
+          <>
+            <div style={{ border: '1px solid #e2e0da', borderRadius: 8, padding: '1rem', boxSizing: 'border-box' }}>
+              <ReciboCobro datos={ultimoCobro} claveFolio={claveFolio} />
+            </div>
+            <button onClick={imprimirRecibo} style={{ marginTop: '0.75rem', width: '100%', padding: '0.5rem', boxSizing: 'border-box' }}>
+              Reimprimir recibo
+            </button>
+          </>
+        ) : (
+          <div
+            style={{
+              border: '1px dashed #ccc',
+              borderRadius: 8,
+              padding: '3rem 1rem',
+              textAlign: 'center',
+              color: '#999',
+              fontSize: '0.85rem',
+              boxSizing: 'border-box'
+            }}
+          >
+            Aquí va a aparecer el recibo al cobrar un boleto.
+          </div>
+        )}
       </div>
 
       {version && (
         <div style={{ position: 'fixed', bottom: '0.5rem', right: '0.75rem', fontSize: '0.7rem', color: '#ccc' }}>
           v{version}
         </div>
+      )}
+
+      {preguntandoImprimirRecibo && (
+        <ConfirmModal
+          mensaje="¿Imprimir recibo?"
+          onSi={() => {
+            setPreguntandoImprimirRecibo(false)
+            imprimirRecibo()
+          }}
+          onNo={() => setPreguntandoImprimirRecibo(false)}
+        />
       )}
     </div>
   )

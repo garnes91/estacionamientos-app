@@ -3,7 +3,18 @@ import type { ReactElement } from 'react'
 import { BLOQUES_CONFIGURABLES } from '../logic/motorTarifas'
 import type { UsuarioSesion } from './OperacionBoletos'
 
-const TABS = ['tipos', 'tarifas', 'planas', 'series', 'texto', 'usuarios', 'correo', 'monitoreo', 'impresion'] as const
+const TABS = [
+  'tipos',
+  'tarifas',
+  'planas',
+  'series',
+  'texto',
+  'usuarios',
+  'correo',
+  'monitoreo',
+  'impresion',
+  'facturacion'
+] as const
 type Tab = (typeof TABS)[number]
 
 const TAB_LABELS: Record<Tab, string> = {
@@ -15,7 +26,8 @@ const TAB_LABELS: Record<Tab, string> = {
   usuarios: 'Usuarios',
   correo: 'Correo',
   monitoreo: 'Monitoreo en la nube',
-  impresion: 'Impresoras'
+  impresion: 'Impresoras',
+  facturacion: 'Facturación'
 }
 
 const inputStyle: React.CSSProperties = { padding: '0.35rem', fontSize: '0.9rem' }
@@ -114,6 +126,9 @@ export function AdminConfig({
       )}
       {tab === 'impresion' && (
         <TabImpresion estacionamientoId={estacionamientoId} avisar={avisar} avisarError={avisarError} />
+      )}
+      {tab === 'facturacion' && (
+        <TabFacturacion estacionamientoId={estacionamientoId} avisar={avisar} avisarError={avisarError} />
       )}
     </div>
   )
@@ -1136,8 +1151,8 @@ function TabMonitoreo({ estacionamientoId, avisar, avisarError }: TabProps): Rea
       <p style={{ color: '#666', fontSize: '0.85rem' }}>
         Manda cada minuto un resumen (ocupación actual, entradas desde el último corte, último corte) a un proyecto
         de Firebase propio, para poder ver el estado de todos tus estacionamientos en tiempo real desde el
-        dashboard (ver <code>dashboard/index.html</code>). Necesitas un proyecto de Firebase con Firestore y
-        autenticación anónima habilitados.
+        panel del operador (ver <code>panel-operador/index.html</code>). Necesitas un proyecto de Firebase con
+        Firestore y autenticación anónima habilitados.
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '0.5rem', alignItems: 'center', maxWidth: 480 }}>
@@ -1270,6 +1285,130 @@ function TabImpresion({ estacionamientoId, avisar, avisarError }: TabProps): Rea
           No se detectaron impresoras instaladas en esta computadora.
         </p>
       )}
+
+      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+        <button onClick={guardar} disabled={guardando}>
+          Guardar
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================
+// Facturación — datos fiscales del emisor para este estacionamiento
+// (RFC/régimen propios, ya que varios operan bajo RESICO). El CSD y la
+// llave de FacturAPI NO se capturan aquí — viven solo del lado del backend
+// de facturación, nunca en esta computadora.
+// ============================================================
+interface ConfiguracionFacturacion {
+  habilitado: boolean
+  rfc: string
+  razonSocial: string
+  regimenFiscal: string
+  codigoPostalFiscal: string
+  claveProductoServicio: string
+  claveUnidad: string
+}
+
+const FACTURACION_VACIA: ConfiguracionFacturacion = {
+  habilitado: false,
+  rfc: '',
+  razonSocial: '',
+  regimenFiscal: '',
+  codigoPostalFiscal: '',
+  claveProductoServicio: '78101803',
+  claveUnidad: 'E48'
+}
+
+function TabFacturacion({ estacionamientoId, avisar, avisarError }: TabProps): ReactElement {
+  const [config, setConfig] = useState<ConfiguracionFacturacion>(FACTURACION_VACIA)
+  const [guardando, setGuardando] = useState(false)
+
+  useEffect(() => {
+    window.api.admin.facturacion.obtener(estacionamientoId).then((c) => {
+      if (c) setConfig(c)
+    })
+  }, [estacionamientoId])
+
+  async function guardar(): Promise<void> {
+    setGuardando(true)
+    try {
+      await window.api.admin.facturacion.guardar({ estacionamientoId, config })
+      avisar('Configuración de facturación guardada')
+    } catch (e) {
+      avisarError(e)
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  return (
+    <div>
+      <p style={{ color: '#666', fontSize: '0.85rem' }}>
+        Datos fiscales del emisor para este estacionamiento — cada instalación puede tener su propio RFC y régimen
+        (muchos operan bajo RESICO). El certificado de sello digital (CSD) y las llaves del proveedor de
+        facturación se configuran aparte, directamente en el proveedor, no aquí.
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '0.5rem', alignItems: 'center', maxWidth: 480 }}>
+        <label>Habilitado</label>
+        <input
+          type="checkbox"
+          checked={config.habilitado}
+          onChange={(e) => setConfig({ ...config, habilitado: e.target.checked })}
+        />
+
+        <label>RFC</label>
+        <input
+          style={inputStyle}
+          placeholder="XAXX010101000"
+          value={config.rfc}
+          onChange={(e) => setConfig({ ...config, rfc: e.target.value })}
+        />
+
+        <label>Razón social</label>
+        <input
+          style={inputStyle}
+          value={config.razonSocial}
+          onChange={(e) => setConfig({ ...config, razonSocial: e.target.value })}
+        />
+
+        <label>Régimen fiscal (clave SAT)</label>
+        <input
+          style={inputStyle}
+          placeholder="626 = RESICO"
+          value={config.regimenFiscal}
+          onChange={(e) => setConfig({ ...config, regimenFiscal: e.target.value })}
+        />
+
+        <label>Código postal fiscal</label>
+        <input
+          style={inputStyle}
+          placeholder="44100"
+          value={config.codigoPostalFiscal}
+          onChange={(e) => setConfig({ ...config, codigoPostalFiscal: e.target.value })}
+        />
+
+        <label>Clave producto/servicio (SAT)</label>
+        <input
+          style={inputStyle}
+          value={config.claveProductoServicio}
+          onChange={(e) => setConfig({ ...config, claveProductoServicio: e.target.value })}
+        />
+
+        <label>Clave unidad (SAT)</label>
+        <input
+          style={inputStyle}
+          value={config.claveUnidad}
+          onChange={(e) => setConfig({ ...config, claveUnidad: e.target.value })}
+        />
+      </div>
+      <p style={{ color: '#999', fontSize: '0.8rem', maxWidth: 480 }}>
+        La factura global de "público en general" de cada serie se genera desde el panel del operador
+        (<code>panel-operador/index.html</code>, pestaña "Facturación global"), no desde esta app — la maneja quien
+        decida cuándo facturar lo pendiente (tú o tu contador), no depende de que esta computadora esté prendida.
+      </p>
 
       <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
         <button onClick={guardar} disabled={guardando}>

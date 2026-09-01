@@ -174,14 +174,26 @@ CREATE INDEX IF NOT EXISTS idx_boletos_hora_salida
 -- último corte), así nunca se cuenta un boleto dos veces ni se salta ninguno.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS cortes (
-  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-  estacionamiento_id  INTEGER NOT NULL REFERENCES estacionamientos(id),
-  desde               TEXT NOT NULL,
-  hasta               TEXT NOT NULL,
-  total_boletos       INTEGER NOT NULL,
-  total_monto         REAL NOT NULL,
-  usuario_id          INTEGER NOT NULL REFERENCES usuarios(id),
-  created_at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  id                          INTEGER PRIMARY KEY AUTOINCREMENT,
+  estacionamiento_id          INTEGER NOT NULL REFERENCES estacionamientos(id),
+  desde                       TEXT NOT NULL,
+  hasta                       TEXT NOT NULL,
+  total_boletos               INTEGER NOT NULL,
+  total_monto                 REAL NOT NULL,
+  -- Pagos de pensionados cobrados en el mismo periodo — aparte del total de
+  -- boletos a propósito (no se suman entre sí aquí) para no cambiarle el
+  -- significado a total_monto en cortes ya existentes; el total combinado
+  -- ("total en caja") se calcula donde se muestra, no se guarda.
+  pensionados_pagos_cantidad  INTEGER NOT NULL DEFAULT 0,
+  pensionados_pagos_monto     REAL NOT NULL DEFAULT 0,
+  -- Gastos pagados EN EFECTIVO en el mismo periodo — estos sí se restan del
+  -- "total en caja" (salen del mismo efectivo de la caja). Gastos por
+  -- transferencia/otro no se cuentan aquí (no afectan lo que debe haber
+  -- físicamente), aunque sí aparecen listados en el detalle del corte.
+  gastos_efectivo_cantidad    INTEGER NOT NULL DEFAULT 0,
+  gastos_efectivo_monto       REAL NOT NULL DEFAULT 0,
+  usuario_id                  INTEGER NOT NULL REFERENCES usuarios(id),
+  created_at                  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_cortes_estacionamiento
@@ -212,7 +224,7 @@ CREATE TABLE IF NOT EXISTS configuracion_correo (
 -- Configuración de monitoreo en la nube — credenciales de un proyecto
 -- Firebase propio del usuario, para mandar un "latido" periódico (ocupación
 -- actual, entradas desde el último corte, último corte) a Firestore y poder
--- ver el estado de varios estacionamientos en tiempo real desde /dashboard.
+-- ver el estado de varios estacionamientos en tiempo real desde /panel-operador.
 -- `slug` identifica a este estacionamiento dentro del proyecto compartido —
 -- cada instalación necesita uno único, elegido a mano por el admin (la base
 -- local siempre tiene un solo estacionamiento con id=1, así que el id local
@@ -225,6 +237,28 @@ CREATE TABLE IF NOT EXISTS configuracion_monitoreo (
   api_key             TEXT NOT NULL,
   project_id          TEXT NOT NULL,
   slug                TEXT NOT NULL,
+  UNIQUE (estacionamiento_id)
+);
+
+-- ============================================================
+-- Configuración de facturación — datos fiscales del emisor para este
+-- estacionamiento. Cada instalación puede tener su propio RFC/régimen
+-- (muchas operan bajo RESICO), así que esto vive por estacionamiento igual
+-- que el resto de la configuración, no de forma global a la app.
+-- OJO: aquí NO se guarda el CSD ni la Secret Key de FacturAPI — esos solo
+-- viven del lado del Cloud Function (ver plan de facturación), nunca en
+-- este SQLite local ni en el portal público.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS configuracion_facturacion (
+  id                            INTEGER PRIMARY KEY AUTOINCREMENT,
+  estacionamiento_id            INTEGER NOT NULL REFERENCES estacionamientos(id),
+  habilitado                    INTEGER NOT NULL DEFAULT 0 CHECK (habilitado IN (0, 1)),
+  rfc                           TEXT NOT NULL,
+  razon_social                  TEXT NOT NULL,
+  regimen_fiscal                TEXT NOT NULL,
+  codigo_postal_fiscal          TEXT NOT NULL,
+  clave_producto_servicio       TEXT NOT NULL DEFAULT '78101803',
+  clave_unidad                  TEXT NOT NULL DEFAULT 'E48',
   UNIQUE (estacionamiento_id)
 );
 
@@ -270,3 +304,87 @@ CREATE TABLE IF NOT EXISTS clave_cifrado_folio (
   clave               TEXT NOT NULL,
   UNIQUE (estacionamiento_id)
 );
+
+-- ============================================================
+-- Pensionados — clientes que pagan una cuota mensual por acceso libre, en
+-- vez de pagar por boleto. `estado`/`fecha_baja` documentan la baja sin
+-- borrar el historial. `vigente_hasta` no se guarda aquí: se calcula a
+-- partir del último pago (o de fecha_alta si nunca ha pagado), ver
+-- src/db/pensionados.ts — así nunca se desincroniza de los pagos reales.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS pensionados (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  estacionamiento_id  INTEGER NOT NULL REFERENCES estacionamientos(id),
+  nombre              TEXT NOT NULL,
+  telefono            TEXT,
+  placa               TEXT,
+  tipo_vehiculo_id    INTEGER NOT NULL REFERENCES tipos_vehiculo(id),
+  cuota_mensual       REAL NOT NULL,
+  fecha_alta          TEXT NOT NULL,
+  estado              TEXT NOT NULL DEFAULT 'activo' CHECK (estado IN ('activo', 'baja')),
+  fecha_baja          TEXT,
+  usuario_alta_id     INTEGER NOT NULL REFERENCES usuarios(id),
+  usuario_baja_id     INTEGER REFERENCES usuarios(id),
+  created_at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_pensionados_estado ON pensionados (estacionamiento_id, estado);
+
+-- Un renglón por mensualidad cobrada. periodo_desde/periodo_hasta es el
+-- rango que ese pago cubre (no necesariamente calendario exacto: permite
+-- prorrateos). El próximo folio/vigencia se deriva del más reciente por
+-- pensionado, nunca se actualiza in place.
+CREATE TABLE IF NOT EXISTS pensionados_pagos (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  pensionado_id   INTEGER NOT NULL REFERENCES pensionados(id),
+  periodo_desde   TEXT NOT NULL,
+  periodo_hasta   TEXT NOT NULL,
+  monto           REAL NOT NULL,
+  usuario_id      INTEGER NOT NULL REFERENCES usuarios(id),
+  created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_pensionados_pagos_pensionado ON pensionados_pagos (pensionado_id, periodo_hasta);
+
+-- ============================================================
+-- Gastos — chicos del día a día (papelería, mantenimiento, etc.) y
+-- periódicos (nómina, luz, agua, internet). Solo los de forma_pago
+-- 'efectivo' salen de la caja del estacionamiento y se restan en los
+-- cortes (ver src/db/cortes.ts, src/db/corteMensual.ts); los demás quedan
+-- igual de registrados, para tener el control completo, pero no afectan la
+-- conciliación de efectivo.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS gastos (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  estacionamiento_id  INTEGER NOT NULL REFERENCES estacionamientos(id),
+  concepto            TEXT NOT NULL,
+  categoria           TEXT NOT NULL CHECK (categoria IN ('operativo', 'nomina', 'servicios', 'otro')),
+  monto               REAL NOT NULL,
+  forma_pago          TEXT NOT NULL DEFAULT 'efectivo' CHECK (forma_pago IN ('efectivo', 'transferencia', 'otro')),
+  fecha               TEXT NOT NULL,
+  usuario_id          INTEGER NOT NULL REFERENCES usuarios(id),
+  created_at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_gastos_estacionamiento ON gastos (estacionamiento_id, fecha);
+
+-- ============================================================
+-- Boletos de cada serie dentro de un corte — un renglón por serie que
+-- estaba ACTIVA al generar ese corte (ver src/db/cortes.ts). Una serie
+-- desactivada (ej. modo "solo serie A") no genera renglón aquí: su rango
+-- (desde, hasta] sigue esperando, sin avanzar, hasta que vuelva a
+-- incluirse en un corte — así no se pierde ni se duplica lo que se cobró
+-- de esa serie mientras estuvo pausada. desde/hasta pueden ser distintos
+-- entre series del MISMO corte si alguna llevaba más tiempo sin cortarse.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS cortes_series (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  corte_id      INTEGER NOT NULL REFERENCES cortes(id),
+  serie         TEXT NOT NULL,
+  desde         TEXT NOT NULL,
+  hasta         TEXT NOT NULL,
+  total_boletos INTEGER NOT NULL,
+  total_monto   REAL NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_cortes_series_serie ON cortes_series (serie, hasta);

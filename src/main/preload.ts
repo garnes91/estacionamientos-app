@@ -41,8 +41,40 @@ contextBridge.exposeInMainWorld('api', {
     hacer: (estacionamientoId: number) => ipcRenderer.invoke('cortes:hacer', estacionamientoId),
     listar: (estacionamientoId: number) => ipcRenderer.invoke('cortes:listar', estacionamientoId),
     detalle: (corteId: number) => ipcRenderer.invoke('cortes:detalle', corteId),
+    mensual: (params: { estacionamientoId: number; anio: number; mes: number }) =>
+      ipcRenderer.invoke('cortes:mensual', params),
     enviarPorCorreo: (params: { corteId: number; htmlReporte: string }) =>
       ipcRenderer.invoke('correo:enviarCorte', params)
+  },
+  pensionados: {
+    listar: (params: { estacionamientoId: number; incluirBajas?: boolean }) =>
+      ipcRenderer.invoke('pensionados:listar', params),
+    crear: (params: {
+      estacionamientoId: number
+      nombre: string
+      telefono?: string | null
+      placa?: string | null
+      tipoVehiculoId: number
+      cuotaMensual: number
+    }) => ipcRenderer.invoke('pensionados:crear', params),
+    darDeBaja: (id: number) => ipcRenderer.invoke('pensionados:darDeBaja', id),
+    registrarPago: (params: { pensionadoId: number; periodoDesde: string; periodoHasta: string; monto: number }) =>
+      ipcRenderer.invoke('pensionados:registrarPago', params),
+    sugerirSiguientePeriodo: (pensionadoId: number) =>
+      ipcRenderer.invoke('pensionados:sugerirSiguientePeriodo', pensionadoId)
+  },
+  gastos: {
+    listar: (params: { estacionamientoId: number; desde?: string; hasta?: string }) =>
+      ipcRenderer.invoke('gastos:listar', params),
+    registrar: (params: {
+      estacionamientoId: number
+      concepto: string
+      categoria: 'operativo' | 'nomina' | 'servicios' | 'otro'
+      monto: number
+      formaPago: 'efectivo' | 'transferencia' | 'otro'
+      fecha: string
+    }) => ipcRenderer.invoke('gastos:registrar', params),
+    eliminar: (id: number) => ipcRenderer.invoke('gastos:eliminar', id)
   },
 
   admin: {
@@ -156,6 +188,21 @@ contextBridge.exposeInMainWorld('api', {
         config: { impresoraTicket: string | null; impresoraReporte: string | null }
       }) => ipcRenderer.invoke('admin:impresion:guardar', params),
       listarImpresoras: () => ipcRenderer.invoke('admin:impresion:listarImpresoras')
+    },
+    facturacion: {
+      obtener: (estacionamientoId: number) => ipcRenderer.invoke('admin:facturacion:obtener', estacionamientoId),
+      guardar: (params: {
+        estacionamientoId: number
+        config: {
+          habilitado: boolean
+          rfc: string
+          razonSocial: string
+          regimenFiscal: string
+          codigoPostalFiscal: string
+          claveProductoServicio: string
+          claveUnidad: string
+        }
+      }) => ipcRenderer.invoke('admin:facturacion:guardar', params)
     }
   }
 })

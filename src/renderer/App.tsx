@@ -6,8 +6,11 @@ import { AdminConfig } from './AdminConfig'
 import { BoletosAbiertos } from './BoletosAbiertos'
 import { CorteCaja } from './CorteCaja'
 import { ReautenticarCorte } from './ReautenticarCorte'
+import { Pensionados } from './Pensionados'
+import { Gastos } from './Gastos'
+import { CorteMensual } from './CorteMensual'
 
-type Pantalla = 'operacion' | 'admin' | 'boletosAbiertos' | 'corte'
+type Pantalla = 'operacion' | 'admin' | 'boletosAbiertos' | 'corte' | 'pensionados' | 'gastos' | 'corteMensual'
 
 function App(): ReactElement {
   const [usuario, setUsuario] = useState<UsuarioSesion | null | undefined>(undefined)
@@ -55,6 +58,12 @@ function App(): ReactElement {
     contenido = <AdminConfig usuario={usuario} onVolver={() => setPantalla('operacion')} onCerrarSesion={cerrarSesion} />
   } else if (pantalla === 'boletosAbiertos') {
     contenido = <BoletosAbiertos onVolver={() => setPantalla('operacion')} />
+  } else if (pantalla === 'pensionados') {
+    contenido = <Pensionados onVolver={() => setPantalla('operacion')} />
+  } else if (pantalla === 'gastos') {
+    contenido = <Gastos onVolver={() => setPantalla('operacion')} />
+  } else if (pantalla === 'corteMensual') {
+    contenido = <CorteMensual onVolver={() => setPantalla('operacion')} />
   } else if (pantalla === 'corte') {
     contenido = !corteAutorizado ? (
       <ReautenticarCorte onVerificado={() => setCorteAutorizado(true)} onCancelar={() => setPantalla('operacion')} />
@@ -69,6 +78,9 @@ function App(): ReactElement {
         onAbrirConfiguracion={usuario.rol === 'admin' ? () => setPantalla('admin') : undefined}
         onVerBoletosAbiertos={() => setPantalla('boletosAbiertos')}
         onVerCorte={() => setPantalla('corte')}
+        onVerPensionados={() => setPantalla('pensionados')}
+        onVerGastos={() => setPantalla('gastos')}
+        onVerCorteMensual={() => setPantalla('corteMensual')}
       />
     )
   }

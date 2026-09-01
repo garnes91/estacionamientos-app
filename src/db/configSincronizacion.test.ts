@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { abrirDb, DB } from './index'
 import { sembrarSiVacio } from './seed'
 import { obtenerEstacionamientoActual } from './estacionamientos'
+import { obtenerUsuarioPorDefecto } from './usuarios'
 import { listarTiposVehiculoAdmin } from './tiposVehiculo'
 import { obtenerTarifaProgresivaActivaPorTipo } from './tarifas'
 import { crearTarifaPlana, listarTarifasPlanas } from './tarifasPlanas'
 import { listarSeries } from './series'
+import { cerrarBoleto, emitirBoleto } from './boletos'
 import { BLOQUES_CONFIGURABLES } from '../logic/motorTarifas'
 import { aplicarConfigSincronizable, construirConfigSincronizable, ConfigSincronizable } from './configSincronizacion'
 
@@ -111,6 +113,148 @@ describe('aplicarConfigSincronizable', () => {
       series: [{ id: 999999, serie: 'Z', proporcion: 1, activo: true, siguienteNumero: 1 }]
     }
 
-    expect(() => aplicarConfigSincronizable(db, estacionamientoId, config)).not.toThrow()
+    const { errores } = aplicarConfigSincronizable(db, estacionamientoId, config)
+    expect(errores).toEqual([])
+  })
+
+  it('crea un tipo de vehículo nuevo (id: null) con su tarifa inicial, utilizable de inmediato', () => {
+    const config = construirConfigSincronizable(db, estacionamientoId)
+    config.tiposVehiculo.push({
+      id: null,
+      nombre: 'Motocicleta',
+      activo: true,
+      tarifaMaximaDiaria: 150,
+      preciosPorBloque: Array(BLOQUES_CONFIGURABLES).fill(5)
+    })
+
+    const { errores } = aplicarConfigSincronizable(db, estacionamientoId, config)
+
+    expect(errores).toEqual([])
+    const creado = listarTiposVehiculoAdmin(db, estacionamientoId).find((t) => t.nombre === 'Motocicleta')!
+    expect(creado).toBeTruthy()
+    const tarifa = obtenerTarifaProgresivaActivaPorTipo(db, creado.id)!
+    expect(tarifa.tarifaMaximaDiaria).toBe(150)
+  })
+
+  it('crea un tipo de vehículo nuevo sin tarifa inicial si no se manda una', () => {
+    const config = construirConfigSincronizable(db, estacionamientoId)
+    config.tiposVehiculo.push({ id: null, nombre: 'Bicicleta', activo: true, tarifaMaximaDiaria: null, preciosPorBloque: null })
+
+    const { errores } = aplicarConfigSincronizable(db, estacionamientoId, config)
+
+    expect(errores).toEqual([])
+    const creado = listarTiposVehiculoAdmin(db, estacionamientoId).find((t) => t.nombre === 'Bicicleta')!
+    expect(obtenerTarifaProgresivaActivaPorTipo(db, creado.id)).toBeNull()
+  })
+
+  it('elimina un tipo de vehículo sin boletos ni tarifas asociadas', () => {
+    // Los tipos del seed ya tienen tarifa progresiva (y por lo tanto una FK
+    // que bloquearía el DELETE) — se crea uno nuevo, sin tarifa, para
+    // probar el caso de eliminación limpia.
+    const config = construirConfigSincronizable(db, estacionamientoId)
+    config.tiposVehiculo.push({ id: null, nombre: 'Sin tarifa', activo: true, tarifaMaximaDiaria: null, preciosPorBloque: null })
+    aplicarConfigSincronizable(db, estacionamientoId, config)
+
+    const config2 = construirConfigSincronizable(db, estacionamientoId)
+    const nuevo = config2.tiposVehiculo.find((t) => t.nombre === 'Sin tarifa')!
+    nuevo.eliminar = true
+
+    const { errores } = aplicarConfigSincronizable(db, estacionamientoId, config2)
+
+    expect(errores).toEqual([])
+    expect(listarTiposVehiculoAdmin(db, estacionamientoId).some((t) => t.nombre === 'Sin tarifa')).toBe(false)
+  })
+
+  it('no elimina un tipo de vehículo con boletos asociados — reporta el error y sigue con el resto del lote', () => {
+    const usuarioId = obtenerUsuarioPorDefecto(db, estacionamientoId).id
+    const emitido = emitirBoleto(db, { estacionamientoId, tipoVehiculoId: tipoAutoId, usuarioEmisionId: usuarioId })
+    cerrarBoleto(db, { boletoId: emitido.id, usuarioCobroId: usuarioId })
+
+    const config = construirConfigSincronizable(db, estacionamientoId)
+    const auto = config.tiposVehiculo.find((t) => t.id === tipoAutoId)!
+    auto.eliminar = true
+    config.nombre = 'Nombre que sí debe aplicarse'
+
+    const { errores } = aplicarConfigSincronizable(db, estacionamientoId, config)
+
+    expect(errores).toHaveLength(1)
+    expect(errores[0]).toContain('Auto')
+    expect(listarTiposVehiculoAdmin(db, estacionamientoId).some((t) => t.id === tipoAutoId)).toBe(true)
+    expect(obtenerEstacionamientoActual(db).nombre).toBe('Nombre que sí debe aplicarse')
+  })
+
+  it('crea una tarifa plana nueva referenciando un tipo de vehículo existente', () => {
+    const config = construirConfigSincronizable(db, estacionamientoId)
+    config.tarifasPlanas.push({
+      id: null,
+      tipoVehiculoId: tipoAutoId,
+      nombre: 'Medio día',
+      precioFijo: 80,
+      horasIncluidas: 4,
+      activo: true
+    })
+
+    const { errores } = aplicarConfigSincronizable(db, estacionamientoId, config)
+
+    expect(errores).toEqual([])
+    expect(listarTarifasPlanas(db, estacionamientoId).some((p) => p.nombre === 'Medio día')).toBe(true)
+  })
+
+  it('no crea una tarifa plana que referencia un tipo de vehículo inexistente — reporta el error', () => {
+    const config = construirConfigSincronizable(db, estacionamientoId)
+    config.tarifasPlanas.push({
+      id: null,
+      tipoVehiculoId: 999999,
+      nombre: 'Fantasma',
+      precioFijo: 80,
+      horasIncluidas: 4,
+      activo: true
+    })
+
+    const { errores } = aplicarConfigSincronizable(db, estacionamientoId, config)
+
+    expect(errores).toHaveLength(1)
+    expect(listarTarifasPlanas(db, estacionamientoId).some((p) => p.nombre === 'Fantasma')).toBe(false)
+  })
+
+  it('"eliminar" en una tarifa plana la desactiva, no la borra', () => {
+    crearTarifaPlana(db, { estacionamientoId, tipoVehiculoId: tipoAutoId, nombre: 'Plana básica', precioFijo: 100, horasIncluidas: 4 })
+
+    const config = construirConfigSincronizable(db, estacionamientoId)
+    const plana = config.tarifasPlanas.find((p) => p.nombre === 'Plana básica')!
+    plana.eliminar = true
+
+    const { errores } = aplicarConfigSincronizable(db, estacionamientoId, config)
+
+    expect(errores).toEqual([])
+    const actual = listarTarifasPlanas(db, estacionamientoId).find((p) => p.nombre === 'Plana básica')!
+    expect(actual).toBeTruthy()
+    expect(actual.activo).toBe(false)
+  })
+
+  it('crea una serie nueva y elimina una existente', () => {
+    const config = construirConfigSincronizable(db, estacionamientoId)
+    config.series.push({ id: null, serie: 'C', proporcion: 2, activo: true, siguienteNumero: 1 })
+    const serieB = config.series.find((s) => s.serie === 'B')!
+    serieB.eliminar = true
+
+    const { errores } = aplicarConfigSincronizable(db, estacionamientoId, config)
+
+    expect(errores).toEqual([])
+    const series = listarSeries(db, estacionamientoId)
+    expect(series.some((s) => s.serie === 'C')).toBe(true)
+    expect(series.some((s) => s.serie === 'B')).toBe(false)
+  })
+
+  it('una serie con formato inválido en el lote no bloquea que se cree la otra que sí es válida', () => {
+    const config = construirConfigSincronizable(db, estacionamientoId)
+    config.series.push({ id: null, serie: 'CC-1', proporcion: 1, activo: true, siguienteNumero: 1 })
+    config.series.push({ id: null, serie: 'D', proporcion: 1, activo: true, siguienteNumero: 1 })
+
+    const { errores } = aplicarConfigSincronizable(db, estacionamientoId, config)
+
+    expect(errores).toHaveLength(1)
+    const series = listarSeries(db, estacionamientoId)
+    expect(series.some((s) => s.serie === 'D')).toBe(true)
   })
 })

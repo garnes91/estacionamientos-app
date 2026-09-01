@@ -1,0 +1,14 @@
+{
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs20",
+    "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
+  },
+  "hosting": {
+    "public": "portal-facturacion",
+    "ignore": ["firebase.json", "**/.*"]
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  }
+}

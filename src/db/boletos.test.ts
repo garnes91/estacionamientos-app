@@ -261,3 +261,4 @@ describe('obtenerResumen', () => {
     expect(obtenerResumen(db, otroEstId)).toEqual({ entradasDesdeUltimoCorte: 0, actualmenteDentro: 0 })
   })
 })
+

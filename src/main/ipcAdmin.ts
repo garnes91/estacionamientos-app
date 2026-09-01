@@ -29,6 +29,11 @@ import {
   guardarConfiguracionMonitoreo,
   obtenerConfiguracionMonitoreo
 } from '../db/configuracionMonitoreo'
+import {
+  ConfiguracionFacturacion,
+  guardarConfiguracionFacturacion,
+  obtenerConfiguracionFacturacion
+} from '../db/configuracionFacturacion'
 
 /** Canales IPC exclusivos de la pantalla de configuración: todos exigen sesión de admin. */
 export function registrarIpcAdmin(): void {
@@ -228,6 +233,19 @@ export function registrarIpcAdmin(): void {
     (_evento, params: { estacionamientoId: number; config: ConfiguracionMonitoreo }) => {
       requerirAdmin()
       guardarConfiguracionMonitoreo(obtenerDb(), params.estacionamientoId, params.config)
+    }
+  )
+
+  ipcMain.handle('admin:facturacion:obtener', (_evento, estacionamientoId: number) => {
+    requerirAdmin()
+    return obtenerConfiguracionFacturacion(obtenerDb(), estacionamientoId)
+  })
+
+  ipcMain.handle(
+    'admin:facturacion:guardar',
+    (_evento, params: { estacionamientoId: number; config: ConfiguracionFacturacion }) => {
+      requerirAdmin()
+      guardarConfiguracionFacturacion(obtenerDb(), params.estacionamientoId, params.config)
     }
   )
 

@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Facturación de estacionamiento</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-0: #f4f3f0;
+    --surface-1: #ffffff;
+    --border: #e2e0da;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #85837c;
+    --accent: #2a78d6;
+    --status-good: #0ca30c;
+    --status-critical: #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --surface-0: #111110;
+      --surface-1: #1a1a19;
+      --border: #333230;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted: #8b8a82;
+      --accent: #3987e5;
+      --status-good: #0ca30c;
+      --status-critical: #e66767;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--surface-0);
+    color: var(--text-primary);
+    padding: 1.5rem;
+  }
+  main {
+    max-width: 480px;
+    margin: 2rem auto;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.75rem;
+  }
+  h1 { font-size: 1.3rem; margin: 0 0 0.25rem; }
+  p.subtitulo { color: var(--text-secondary); margin: 0 0 1.5rem; font-size: 0.9rem; }
+  label { display: block; font-size: 0.85rem; margin: 0.9rem 0 0.3rem; }
+  input, select {
+    width: 100%;
+    font: inherit;
+    padding: 0.5rem 0.6rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-0);
+    color: var(--text-primary);
+  }
+  button {
+    width: 100%;
+    font: inherit;
+    font-weight: 600;
+    padding: 0.65rem;
+    margin-top: 1.5rem;
+    border-radius: 8px;
+    border: none;
+    background: var(--accent);
+    color: white;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+  #mensaje { margin-top: 1rem; font-size: 0.9rem; padding: 0.75rem; border-radius: 8px; display: none; }
+  #mensaje.exito { display: block; background: color-mix(in srgb, var(--status-good) 15%, transparent); color: var(--status-good); }
+  #mensaje.error { display: block; background: color-mix(in srgb, var(--status-critical) 15%, transparent); color: var(--status-critical); }
+  #sin-estacionamiento { text-align: center; color: var(--text-secondary); max-width: 420px; margin: 3rem auto; }
+</style>
+</head>
+<body>
+
+<main id="formulario-caja" style="display:none;">
+  <h1>Factura tu boleto de estacionamiento</h1>
+  <p class="subtitulo">Ingresa el folio impreso en tu ticket y tus datos fiscales. La factura (PDF y XML) se envía al correo que captures aquí.</p>
+
+  <form id="form">
+    <label for="codigoImpreso">Folio del ticket</label>
+    <input id="codigoImpreso" required placeholder="Como aparece impreso en tu boleto" />
+
+    <label for="rfc">RFC</label>
+    <input id="rfc" required placeholder="XAXX010101000" style="text-transform: uppercase;" />
+
+    <label for="razonSocial">Razón social / Nombre completo</label>
+    <input id="razonSocial" required />
+
+    <label for="regimenFiscal">Régimen fiscal</label>
+    <select id="regimenFiscal" required>
+      <option value="616">616 - Sin obligaciones fiscales</option>
+      <option value="605">605 - Sueldos y Salarios e Ingresos Asimilados a Salarios</option>
+      <option value="612" selected>612 - Personas Físicas con Actividades Empresariales y Profesionales</option>
+      <option value="621">621 - Incorporación Fiscal</option>
+      <option value="626">626 - Régimen Simplificado de Confianza (RESICO)</option>
+      <option value="601">601 - General de Ley Personas Morales</option>
+      <option value="603">603 - Personas Morales con Fines no Lucrativos</option>
+      <option value="606">606 - Arrendamiento</option>
+      <option value="607">607 - Régimen de Enajenación o Adquisición de Bienes</option>
+      <option value="608">608 - Demás ingresos</option>
+      <option value="610">610 - Residentes en el Extranjero sin Establecimiento Permanente en México</option>
+      <option value="611">611 - Ingresos por Dividendos (socios y accionistas)</option>
+      <option value="614">614 - Ingresos por intereses</option>
+      <option value="615">615 - Régimen de los ingresos por obtención de premios</option>
+      <option value="620">620 - Sociedades Cooperativas de Producción que optan por diferir sus ingresos</option>
+      <option value="622">622 - Actividades Agrícolas, Ganaderas, Silvícolas y Pesqueras</option>
+      <option value="623">623 - Opcional para Grupos de Sociedades</option>
+      <option value="624">624 - Coordinados</option>
+      <option value="625">625 - Régimen de las Actividades Empresariales con ingresos a través de Plataformas Tecnológicas</option>
+    </select>
+
+    <label for="usoCFDI">Uso del CFDI</label>
+    <select id="usoCFDI" required>
+      <option value="G03" selected>G03 - Gastos en general</option>
+      <option value="G01">G01 - Adquisición de mercancías</option>
+      <option value="P01">P01 - Por definir</option>
+      <option value="S01">S01 - Sin efectos fiscales</option>
+    </select>
+
+    <label for="codigoPostal">Código postal (de tu domicilio fiscal)</label>
+    <input id="codigoPostal" required placeholder="44100" inputmode="numeric" />
+
+    <label for="email">Correo (aquí se envía tu factura)</label>
+    <input id="email" type="email" required />
+
+    <button id="btn-enviar" type="submit">Generar factura</button>
+  </form>
+
+  <div id="mensaje"></div>
+</main>
+
+<p id="sin-estacionamiento" style="display:none;">
+  Falta el estacionamiento en el enlace. Pide al operador el enlace completo, o revisa el QR impreso en tu boleto.
+</p>
+
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js'
+  import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js'
+
+  // Mismo proyecto Firebase que ya usa el monitoreo (dashboard/panel-remoto)
+  // — decisión tomada al diseñar esta feature. A diferencia de esas dos
+  // páginas, aquí el config NO se pega a mano: este portal se despliega
+  // junto con las Cloud Functions de este mismo proyecto (ver
+  // ../firebase.json), así que el config es fijo. La apiKey de Firebase es
+  // pública por diseño (identifica el proyecto, no autoriza nada por sí
+  // sola) — igual que la que ya usa src/main/heartbeat.ts en la app.
+  const firebaseConfig = {
+    apiKey: 'AIzaSyADAnOwZ6_X1zP6kTzaved2iEUFp2cCV8I',
+    authDomain: 'parkio-d6289.firebaseapp.com',
+    projectId: 'parkio-d6289',
+    storageBucket: 'parkio-d6289.firebasestorage.app',
+    messagingSenderId: '901942264083',
+    appId: '1:901942264083:web:9c2aeef76dc865db851ae6',
+    measurementId: 'G-5QH07FZXZ6'
+  }
+
+  const elFormularioCaja = document.getElementById('formulario-caja')
+  const elSinEstacionamiento = document.getElementById('sin-estacionamiento')
+  const elForm = document.getElementById('form')
+  const elBoton = document.getElementById('btn-enviar')
+  const elMensaje = document.getElementById('mensaje')
+
+  const slug = new URLSearchParams(location.search).get('estacionamiento')
+  if (!slug) {
+    elSinEstacionamiento.style.display = 'block'
+  } else {
+    elFormularioCaja.style.display = 'block'
+  }
+
+  const app = initializeApp(firebaseConfig)
+  const functions = getFunctions(app)
+  const crearFacturaIndividual = httpsCallable(functions, 'crearFacturaIndividual')
+
+  function mostrarMensaje(texto, tipo) {
+    elMensaje.textContent = texto
+    elMensaje.className = tipo
+  }
+
+  const MENSAJES_ERROR = {
+    'not-found': 'No encontramos ese folio. Revisa que lo hayas escrito tal cual aparece impreso — puede tardar unos minutos en aparecer disponible después de pagar.',
+    'already-exists': 'Este boleto ya fue facturado. Si tú no lo hiciste, contacta al operador del estacionamiento.',
+    'invalid-argument': 'Revisa que todos los campos estén completos y correctos.',
+    'failed-precondition': 'Este estacionamiento no tiene la facturación configurada todavía. Contacta al operador.'
+  }
+
+  elForm.addEventListener('submit', async (evento) => {
+    evento.preventDefault()
+    elBoton.disabled = true
+    elMensaje.className = ''
+
+    try {
+      const resultado = await crearFacturaIndividual({
+        slug,
+        codigoImpreso: document.getElementById('codigoImpreso').value.trim(),
+        receptor: {
+          rfc: document.getElementById('rfc').value.trim().toUpperCase(),
+          razonSocial: document.getElementById('razonSocial').value.trim(),
+          regimenFiscal: document.getElementById('regimenFiscal').value,
+          usoCFDI: document.getElementById('usoCFDI').value,
+          codigoPostal: document.getElementById('codigoPostal').value.trim(),
+          email: document.getElementById('email').value.trim()
+        }
+      })
+
+      mostrarMensaje(
+        `Listo — tu factura (folio fiscal ${resultado.data.folioFiscal}) se envió a tu correo.`,
+        'exito'
+      )
+      elForm.reset()
+    } catch (error) {
+      mostrarMensaje(MENSAJES_ERROR[error.code?.replace('functions/', '')] || `No se pudo generar la factura: ${error.message}`, 'error')
+    } finally {
+      elBoton.disabled = false
+    }
+  })
+</script>
+
+</body>
+</html>

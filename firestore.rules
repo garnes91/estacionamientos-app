@@ -1,0 +1,44 @@
+rules_version = '2';
+
+// Reglas de Firestore para el proyecto compartido de monitoreo/facturación
+// (ver dashboard/, panel-remoto/, src/main/heartbeat.ts, src/main/facturacionSync.ts).
+//
+// IMPORTANTE: este archivo no se aplicaba solo hasta ahora — no existía
+// ningún firestore.rules en el repo, así que las reglas vigentes hoy en el
+// proyecto de Firebase viven únicamente en la consola. Antes de desplegar
+// esto, revisa que la sección "estacionamientos/{slug}" reproduzca el
+// comportamiento actual (dashboard.html y panel-remoto.html deben seguir
+// pudiendo leer/escribir con auth anónima) — no lo hagas a ciegas.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /estacionamientos/{slug} {
+      // Lee/escribe el documento de estado (dashboard, panel-remoto,
+      // heartbeat.ts) — cualquier usuario autenticado, incluida la auth
+      // anónima que ya usa la app.
+      allow read, write: if request.auth != null;
+
+      // Boletos cerrados pendientes de facturar (facturacionSync.ts). Solo
+      // el backend de facturación (Cloud Functions, vía Admin SDK) puede
+      // tocarlos — el Admin SDK ignora estas reglas, así que "deny all"
+      // aquí es exactamente lo que se busca: ningún cliente (dashboard,
+      // panel-remoto, portal público, ni nadie con la API key) puede leer
+      // o alterar montos/estado de facturación directamente.
+      match /boletosFacturables/{codigoImpreso} {
+        allow read, write: if false;
+      }
+    }
+
+    // Secretos de facturación (organizationId + Secret Key de FacturAPI por
+    // estacionamiento) — nunca deben ser legibles ni escribibles desde
+    // ningún cliente, solo desde Cloud Functions con Admin SDK.
+    match /facturacionSecretos/{slug} {
+      allow read, write: if false;
+    }
+
+    // Cualquier otra ruta no contemplada arriba: denegada por defecto.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

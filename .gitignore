@@ -5,3 +5,5 @@ dist-electron/
 release/
 .DS_Store
 *.log
+.firebase/
+functions/lib/

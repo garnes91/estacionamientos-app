@@ -65,7 +65,7 @@ export function registrarCorreo(): void {
       from: config.remitente,
       to: config.destinatarios,
       subject: `Corte de caja — ${estacionamiento.nombre} (${formatearFecha(detalle.hasta)})`,
-      text: `Corte de caja del ${formatearFecha(detalle.desde)} al ${formatearFecha(detalle.hasta)}.\nTotal: ${detalle.totalBoletos} boletos, $${detalle.totalMonto.toFixed(2)}.\n\nSe adjunta en PDF y Excel.`,
+      text: `Corte de caja del ${formatearFecha(detalle.desde)} al ${formatearFecha(detalle.hasta)}.\nBoletos: ${detalle.totalBoletos}, $${detalle.totalMonto.toFixed(2)}.\nPensionados: ${detalle.pensionadosPagosCantidad} pagos, $${detalle.pensionadosPagosMonto.toFixed(2)}.\nGastos en efectivo: ${detalle.gastosEfectivoCantidad}, -$${detalle.gastosEfectivoMonto.toFixed(2)}.\nTotal en caja: $${(detalle.totalMonto + detalle.pensionadosPagosMonto - detalle.gastosEfectivoMonto).toFixed(2)}.\n\nSe adjunta en PDF y Excel.`,
       attachments: [
         { filename: `${nombreArchivo}.pdf`, content: pdf },
         {

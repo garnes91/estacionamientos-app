@@ -35,6 +35,7 @@ interface BoletoCerradoApi {
   id: number
   serie: string
   folio: number
+  horaSalida: string
   minutosTotales: number
   tipoCobro: 'regular' | 'plana'
   monto: number
@@ -91,6 +92,10 @@ interface CorteApi {
   hasta: string
   totalBoletos: number
   totalMonto: number
+  pensionadosPagosCantidad: number
+  pensionadosPagosMonto: number
+  gastosEfectivoCantidad: number
+  gastosEfectivoMonto: number
   usuarioId: number
 }
 
@@ -106,14 +111,100 @@ interface DetalleCorteBoletoApi {
 
 interface DetalleCortePorSerieApi {
   serie: string
+  desde: string
+  hasta: string
   boletos: DetalleCorteBoletoApi[]
   totalBoletos: number
   totalMonto: number
 }
 
+interface DetalleCortePensionadoPagoApi {
+  id: number
+  pensionadoNombre: string
+  monto: number
+  periodoDesde: string
+  periodoHasta: string
+  fechaPago: string
+}
+
+interface DetalleCortePensionadoEventoApi {
+  id: number
+  nombre: string
+  fecha: string
+}
+
 interface DetalleCorteApi extends CorteApi {
   porTipoVehiculo: { tipoVehiculo: string; boletos: number; monto: number }[]
   porSerie: DetalleCortePorSerieApi[]
+  pagosPensionados: DetalleCortePensionadoPagoApi[]
+  altasPensionados: DetalleCortePensionadoEventoApi[]
+  bajasPensionados: DetalleCortePensionadoEventoApi[]
+  gastosDelPeriodo: GastoApi[]
+}
+
+interface PensionadoApi {
+  id: number
+  nombre: string
+  telefono: string | null
+  placa: string | null
+  tipoVehiculoId: number
+  tipoVehiculo: string
+  cuotaMensual: number
+  fechaAlta: string
+  estado: 'activo' | 'baja'
+  fechaBaja: string | null
+  vigenteHasta: string
+}
+
+interface PagoPensionadoApi {
+  id: number
+  pensionadoId: number
+  periodoDesde: string
+  periodoHasta: string
+  monto: number
+}
+
+interface PeriodoSugeridoApi {
+  periodoDesde: string
+  periodoHasta: string
+}
+
+type CategoriaGastoApi = 'operativo' | 'nomina' | 'servicios' | 'otro'
+type FormaPagoGastoApi = 'efectivo' | 'transferencia' | 'otro'
+
+interface GastoApi {
+  id: number
+  concepto: string
+  categoria: CategoriaGastoApi
+  monto: number
+  formaPago: FormaPagoGastoApi
+  fecha: string
+  usuarioId: number
+}
+
+interface ResumenGastosPorCategoriaApi {
+  categoria: CategoriaGastoApi
+  cantidad: number
+  monto: number
+}
+
+interface CorteMensualApi {
+  anio: number
+  mes: number
+  desde: string
+  hasta: string
+  totalBoletos: number
+  totalMonto: number
+  pensionadosPagosCantidad: number
+  pensionadosPagosMonto: number
+  pagosPensionados: DetalleCortePensionadoPagoApi[]
+  altasPensionados: DetalleCortePensionadoEventoApi[]
+  bajasPensionados: DetalleCortePensionadoEventoApi[]
+  gastosEfectivoCantidad: number
+  gastosEfectivoMonto: number
+  gastosPorCategoria: ResumenGastosPorCategoriaApi[]
+  totalEnCaja: number
+  cortesDelMes: CorteApi[]
 }
 
 interface ConfiguracionCorreoApi {
@@ -136,6 +227,16 @@ interface ConfiguracionMonitoreoApi {
 interface ConfiguracionImpresionApi {
   impresoraTicket: string | null
   impresoraReporte: string | null
+}
+
+interface ConfiguracionFacturacionApi {
+  habilitado: boolean
+  rfc: string
+  razonSocial: string
+  regimenFiscal: string
+  codigoPostalFiscal: string
+  claveProductoServicio: string
+  claveUnidad: string
 }
 
 interface ImpresoraApi {
@@ -187,7 +288,39 @@ declare global {
         hacer: (estacionamientoId: number) => Promise<CorteApi>
         listar: (estacionamientoId: number) => Promise<CorteApi[]>
         detalle: (corteId: number) => Promise<DetalleCorteApi>
+        mensual: (params: { estacionamientoId: number; anio: number; mes: number }) => Promise<CorteMensualApi>
         enviarPorCorreo: (params: { corteId: number; htmlReporte: string }) => Promise<void>
+      }
+      pensionados: {
+        listar: (params: { estacionamientoId: number; incluirBajas?: boolean }) => Promise<PensionadoApi[]>
+        crear: (params: {
+          estacionamientoId: number
+          nombre: string
+          telefono?: string | null
+          placa?: string | null
+          tipoVehiculoId: number
+          cuotaMensual: number
+        }) => Promise<PensionadoApi>
+        darDeBaja: (id: number) => Promise<void>
+        registrarPago: (params: {
+          pensionadoId: number
+          periodoDesde: string
+          periodoHasta: string
+          monto: number
+        }) => Promise<PagoPensionadoApi>
+        sugerirSiguientePeriodo: (pensionadoId: number) => Promise<PeriodoSugeridoApi>
+      }
+      gastos: {
+        listar: (params: { estacionamientoId: number; desde?: string; hasta?: string }) => Promise<GastoApi[]>
+        registrar: (params: {
+          estacionamientoId: number
+          concepto: string
+          categoria: CategoriaGastoApi
+          monto: number
+          formaPago: FormaPagoGastoApi
+          fecha: string
+        }) => Promise<GastoApi>
+        eliminar: (id: number) => Promise<void>
       }
 
       admin: {
@@ -268,6 +401,10 @@ declare global {
           obtener: (estacionamientoId: number) => Promise<ConfiguracionImpresionApi | null>
           guardar: (params: { estacionamientoId: number; config: ConfiguracionImpresionApi }) => Promise<void>
           listarImpresoras: () => Promise<ImpresoraApi[]>
+        }
+        facturacion: {
+          obtener: (estacionamientoId: number) => Promise<ConfiguracionFacturacionApi | null>
+          guardar: (params: { estacionamientoId: number; config: ConfiguracionFacturacionApi }) => Promise<void>
         }
       }
     }

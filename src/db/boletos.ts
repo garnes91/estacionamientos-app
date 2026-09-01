@@ -139,6 +139,7 @@ export interface BoletoCerrado {
   id: number
   serie: string
   folio: number
+  horaSalida: string
   minutosTotales: number
   tipoCobro: 'regular' | 'plana'
   monto: number
@@ -203,6 +204,7 @@ export function cerrarBoleto(db: DB, input: CierreBoletoInput): BoletoCerrado {
       id: boleto.id,
       serie: boleto.serie,
       folio: boleto.folio,
+      horaSalida: horaSalida.toISOString(),
       minutosTotales: detalle.minutosTotales,
       tipoCobro: detalle.tipoCobro,
       monto: detalle.monto,

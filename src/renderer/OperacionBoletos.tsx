@@ -37,12 +37,18 @@ export function OperacionBoletos({
   onCerrarSesion,
   onAbrirConfiguracion,
   onVerBoletosAbiertos,
-  onVerCorte
+  onVerCorte,
+  onVerPensionados,
+  onVerGastos,
+  onVerCorteMensual
 }: {
   usuario: UsuarioSesion
   onCerrarSesion: () => void
   onAbrirConfiguracion?: () => void
   onVerBoletosAbiertos: () => void
+  onVerPensionados: () => void
+  onVerGastos: () => void
+  onVerCorteMensual: () => void
   onVerCorte: () => void
 }): ReactElement {
   const [estacionamientoId, setEstacionamientoId] = useState<number | null>(null)
@@ -361,13 +367,11 @@ export function OperacionBoletos({
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', alignItems: 'center' }}>
           <button onClick={onVerBoletosAbiertos}>Ver boletos abiertos</button>
           <button onClick={onVerCorte}>Corte de caja</button>
-          {soloSerieA && (
-            <span
-              title="Solo serie A activo — Ctrl+Shift+A para restaurar las demás series"
-              style={{ marginLeft: 'auto', fontSize: '1.4rem', color: '#c98a00', cursor: 'default' }}
-            >
-              ⚠️
-            </span>
+          <button onClick={onVerPensionados}>Pensionados</button>
+          <button onClick={onVerGastos}>Gastos</button>
+          {!soloSerieA && <button onClick={onVerCorteMensual}>Corte mensual</button>}
+          {!soloSerieA && (
+            <span style={{ marginLeft: 'auto', fontSize: '1.1rem', color: '#2e8b45', cursor: 'default' }}>✓</span>
           )}
         </div>
 

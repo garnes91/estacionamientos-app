@@ -8,7 +8,20 @@ interface Corte {
   hasta: string
   totalBoletos: number
   totalMonto: number
+  pensionadosPagosCantidad: number
+  pensionadosPagosMonto: number
+  gastosEfectivoCantidad: number
+  gastosEfectivoMonto: number
   usuarioId: number
+}
+
+interface Gasto {
+  id: number
+  concepto: string
+  categoria: string
+  monto: number
+  formaPago: string
+  fecha: string
 }
 
 interface DetalleCorteBoleto {
@@ -23,14 +36,39 @@ interface DetalleCorteBoleto {
 
 interface DetalleCortePorSerie {
   serie: string
+  desde: string
+  hasta: string
   boletos: DetalleCorteBoleto[]
   totalBoletos: number
   totalMonto: number
 }
 
+interface DetalleCortePensionadoPago {
+  id: number
+  pensionadoNombre: string
+  monto: number
+  periodoDesde: string
+  periodoHasta: string
+  fechaPago: string
+}
+
+interface DetalleCortePensionadoEvento {
+  id: number
+  nombre: string
+  fecha: string
+}
+
 interface DetalleCorte extends Corte {
   porTipoVehiculo: { tipoVehiculo: string; boletos: number; monto: number }[]
   porSerie: DetalleCortePorSerie[]
+  pagosPensionados: DetalleCortePensionadoPago[]
+  altasPensionados: DetalleCortePensionadoEvento[]
+  bajasPensionados: DetalleCortePensionadoEvento[]
+  gastosDelPeriodo: Gasto[]
+}
+
+function totalEnCaja(c: Corte): number {
+  return c.totalMonto + c.pensionadosPagosMonto - c.gastosEfectivoMonto
 }
 
 function formatearFecha(iso: string): string {
@@ -74,6 +112,7 @@ export function CorteCaja({
   const [estacionamientoId, setEstacionamientoId] = useState<number | null>(null)
   const [nombreEstacionamiento, setNombreEstacionamiento] = useState('')
   const [claveFolio, setClaveFolio] = useState('')
+  const [soloSerieA, setSoloSerieA] = useState(false)
   const [historial, setHistorial] = useState<Corte[]>([])
   const [detalleActual, setDetalleActual] = useState<DetalleCorte | null>(null)
   const [generando, setGenerando] = useState(false)
@@ -95,6 +134,7 @@ export function CorteCaja({
       setNombreEstacionamiento(e.nombre)
       setClaveFolio(e.claveFolio)
       cargarHistorial(e.id).catch((err) => setError(String(err)))
+      window.api.modoSoloSerieA.estado(e.id).then(setSoloSerieA)
     })
   }, [])
 
@@ -198,10 +238,16 @@ export function CorteCaja({
 
           <div id="corte-general-imprimible">
             <h2 style={{ marginBottom: 0 }}>{nombreEstacionamiento}</h2>
-            <p style={{ color: '#666', margin: '0.25rem 0' }}>Corte de caja — todas las series</p>
+            <p style={{ color: '#666', margin: '0.25rem 0' }}>Corte de caja</p>
             <p>
-              Periodo: {formatearFecha(detalleActual.desde)} — {formatearFecha(detalleActual.hasta)}
+              {soloSerieA ? 'Periodo' : 'Periodo (pensionados y gastos)'}: {formatearFecha(detalleActual.desde)} —{' '}
+              {formatearFecha(detalleActual.hasta)}
             </p>
+            {!soloSerieA && (
+              <p style={{ color: '#666', fontSize: '0.8rem', marginTop: '-0.5rem' }}>
+                Cada serie de boletos tiene su propio periodo abajo — pueden diferir si alguna estuvo desactivada.
+              </p>
+            )}
             <p>Generado por: {nombreUsuario}</p>
 
             <h3>Por tipo de vehículo</h3>
@@ -224,73 +270,173 @@ export function CorteCaja({
               </tbody>
             </table>
 
-            <h3>Detalle por serie</h3>
+            {(detalleActual.pagosPensionados.length > 0 ||
+              detalleActual.altasPensionados.length > 0 ||
+              detalleActual.bajasPensionados.length > 0) && (
+              <>
+                <h3>Pensionados</h3>
+                {detalleActual.altasPensionados.length > 0 && (
+                  <p>
+                    Altas ({detalleActual.altasPensionados.length}): {detalleActual.altasPensionados.map((a) => a.nombre).join(', ')}
+                  </p>
+                )}
+                {detalleActual.bajasPensionados.length > 0 && (
+                  <p>
+                    Bajas ({detalleActual.bajasPensionados.length}): {detalleActual.bajasPensionados.map((b) => b.nombre).join(', ')}
+                  </p>
+                )}
+                {detalleActual.pagosPensionados.length > 0 && (
+                  <table cellPadding={6} style={{ borderCollapse: 'collapse', width: '100%' }}>
+                    <thead>
+                      <tr style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>
+                        <th>Pensionado</th>
+                        <th>Periodo</th>
+                        <th>Monto</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detalleActual.pagosPensionados.map((p) => (
+                        <tr key={p.id} style={{ borderBottom: '1px solid #eee' }}>
+                          <td>{p.pensionadoNombre}</td>
+                          <td>
+                            {formatearFecha(p.periodoDesde)} — {formatearFecha(p.periodoHasta)}
+                          </td>
+                          <td>${p.monto.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </>
+            )}
+
+            {detalleActual.gastosDelPeriodo.length > 0 && (
+              <>
+                <h3>Gastos</h3>
+                <table cellPadding={6} style={{ borderCollapse: 'collapse', width: '100%' }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>
+                      <th>Concepto</th>
+                      <th>Categoría</th>
+                      <th>Forma de pago</th>
+                      <th>Monto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detalleActual.gastosDelPeriodo.map((g) => (
+                      <tr key={g.id} style={{ borderBottom: '1px solid #eee' }}>
+                        <td>{g.concepto}</td>
+                        <td>{g.categoria}</td>
+                        <td>{g.formaPago}</td>
+                        <td>${g.monto.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p style={{ color: '#666', fontSize: '0.8rem' }}>
+                  Solo los de forma de pago "efectivo" se restan del total en caja de abajo — los demás quedan
+                  registrados aquí para control, pero se pagaron aparte.
+                </p>
+              </>
+            )}
+
+            <h3>{soloSerieA ? 'Detalle de boletos' : 'Detalle por serie'}</h3>
             {detalleActual.porSerie.map((s) => (
               <div key={s.serie} style={{ marginBottom: '1rem' }}>
                 <p style={{ fontWeight: 'bold', marginBottom: '0.25rem' }}>
-                  Serie {s.serie} — {s.totalBoletos} boletos, ${s.totalMonto.toFixed(2)}
+                  {soloSerieA ? 'Boletos' : `Serie ${s.serie}`} — {s.totalBoletos} boletos, ${s.totalMonto.toFixed(2)}
                 </p>
+                {!soloSerieA && (
+                  <p style={{ color: '#666', fontSize: '0.8rem', margin: '0 0 0.25rem' }}>
+                    Periodo: {formatearFecha(s.desde)} — {formatearFecha(s.hasta)}
+                  </p>
+                )}
                 <TablaBoletos boletos={s.boletos} claveFolio={claveFolio} />
               </div>
             ))}
 
-            <p style={{ fontWeight: 'bold', fontSize: '1.1rem', borderTop: '2px solid #333', paddingTop: '0.5rem' }}>
-              Total general: {detalleActual.totalBoletos} boletos, ${detalleActual.totalMonto.toFixed(2)}
+            <p style={{ fontWeight: 'bold', fontSize: '1.1rem', borderTop: '2px solid #333', paddingTop: '0.5rem', marginBottom: 0 }}>
+              Total general (boletos): {detalleActual.totalBoletos} boletos, ${detalleActual.totalMonto.toFixed(2)}
             </p>
+            {detalleActual.pensionadosPagosMonto > 0 && (
+              <p style={{ margin: '0.25rem 0' }}>
+                Pensionados: {detalleActual.pensionadosPagosCantidad} pagos, ${detalleActual.pensionadosPagosMonto.toFixed(2)}
+              </p>
+            )}
+            {detalleActual.gastosEfectivoMonto > 0 && (
+              <p style={{ margin: '0.25rem 0' }}>
+                Gastos en efectivo: {detalleActual.gastosEfectivoCantidad}, -${detalleActual.gastosEfectivoMonto.toFixed(2)}
+              </p>
+            )}
+            <p style={{ fontWeight: 'bold', fontSize: '1.2rem' }}>Total en caja: ${totalEnCaja(detalleActual).toFixed(2)}</p>
           </div>
 
-          <h2 style={{ marginTop: '2rem' }}>Por serie (imprimir por separado)</h2>
-          {detalleActual.porSerie.map((s) => (
-            <div key={s.serie} style={{ marginBottom: '1.5rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ margin: 0 }}>
-                  Serie {s.serie} — {s.totalBoletos} boletos, ${s.totalMonto.toFixed(2)}
-                </h3>
-                <button onClick={() => imprimirElemento(`corte-serie-${s.serie}-imprimible`)}>
-                  Imprimir serie {s.serie}
-                </button>
-              </div>
-              <div id={`corte-serie-${s.serie}-imprimible`}>
-                <h2 style={{ marginBottom: 0 }}>{nombreEstacionamiento}</h2>
-                <p style={{ color: '#666', margin: '0.25rem 0' }}>Corte de caja — serie {s.serie}</p>
-                <p>
-                  Periodo: {formatearFecha(detalleActual.desde)} — {formatearFecha(detalleActual.hasta)}
-                </p>
-                <p>Generado por: {nombreUsuario}</p>
-                <TablaBoletos boletos={s.boletos} claveFolio={claveFolio} />
-                <p style={{ fontWeight: 'bold', borderTop: '2px solid #333', paddingTop: '0.5rem' }}>
-                  Total serie {s.serie}: {s.totalBoletos} boletos, ${s.totalMonto.toFixed(2)}
-                </p>
-              </div>
-            </div>
-          ))}
+          {!soloSerieA && (
+            <>
+              <h2 style={{ marginTop: '2rem' }}>Por serie (imprimir por separado)</h2>
+              {detalleActual.porSerie.map((s) => (
+                <div key={s.serie} style={{ marginBottom: '1.5rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h3 style={{ margin: 0 }}>
+                      Serie {s.serie} — {s.totalBoletos} boletos, ${s.totalMonto.toFixed(2)}
+                    </h3>
+                    <button onClick={() => imprimirElemento(`corte-serie-${s.serie}-imprimible`)}>
+                      Imprimir serie {s.serie}
+                    </button>
+                  </div>
+                  <div id={`corte-serie-${s.serie}-imprimible`}>
+                    <h2 style={{ marginBottom: 0 }}>{nombreEstacionamiento}</h2>
+                    <p style={{ color: '#666', margin: '0.25rem 0' }}>Corte de caja — serie {s.serie}</p>
+                    <p>
+                      Periodo: {formatearFecha(s.desde)} — {formatearFecha(s.hasta)}
+                    </p>
+                    <p>Generado por: {nombreUsuario}</p>
+                    <TablaBoletos boletos={s.boletos} claveFolio={claveFolio} />
+                    <p style={{ fontWeight: 'bold', borderTop: '2px solid #333', paddingTop: '0.5rem' }}>
+                      Total serie {s.serie}: {s.totalBoletos} boletos, ${s.totalMonto.toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
         </>
       )}
 
-      <h2 style={{ marginTop: '2rem' }}>Historial</h2>
-      <table cellPadding={6} style={{ borderCollapse: 'collapse', width: '100%' }}>
-        <thead>
-          <tr style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>
-            <th>Hasta</th>
-            <th>Boletos</th>
-            <th>Monto</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {historial.map((c) => (
-            <tr key={c.id} style={{ borderBottom: '1px solid #eee' }}>
-              <td>{formatearFecha(c.hasta)}</td>
-              <td>{c.totalBoletos}</td>
-              <td>${c.totalMonto.toFixed(2)}</td>
-              <td>
-                <button onClick={() => verDetalle(c.id)}>Ver</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {historial.length === 0 && <p style={{ color: '#666' }}>Todavía no se ha generado ningún corte.</p>}
+      {!soloSerieA && (
+        <>
+          <h2 style={{ marginTop: '2rem' }}>Historial</h2>
+          <table cellPadding={6} style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <thead>
+              <tr style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>
+                <th>Hasta</th>
+                <th>Boletos</th>
+                <th>Monto</th>
+                <th>Pensiones</th>
+                <th>Gastos</th>
+                <th>Total en caja</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {historial.map((c) => (
+                <tr key={c.id} style={{ borderBottom: '1px solid #eee' }}>
+                  <td>{formatearFecha(c.hasta)}</td>
+                  <td>{c.totalBoletos}</td>
+                  <td>${c.totalMonto.toFixed(2)}</td>
+                  <td>{c.pensionadosPagosMonto > 0 ? `$${c.pensionadosPagosMonto.toFixed(2)}` : '—'}</td>
+                  <td>{c.gastosEfectivoMonto > 0 ? `-$${c.gastosEfectivoMonto.toFixed(2)}` : '—'}</td>
+                  <td>${totalEnCaja(c).toFixed(2)}</td>
+                  <td>
+                    <button onClick={() => verDetalle(c.id)}>Ver</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {historial.length === 0 && <p style={{ color: '#666' }}>Todavía no se ha generado ningún corte.</p>}
+        </>
+      )}
     </div>
   )
 }

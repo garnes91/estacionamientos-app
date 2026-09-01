@@ -1198,11 +1198,13 @@
     }
 
     if (!user) {
+      document.querySelectorAll('.vista').forEach((el) => (el.style.display = 'none'))
       elEstadoConexion.textContent = 'Sin iniciar sesión'
       elTabsNav.style.display = 'none'
       elBtnConfig.style.display = 'none'
       elBtnCambiarPassword.style.display = 'none'
       elBtnLogout.style.display = 'none'
+      elConfig.style.display = 'none'
       elCambiarPassword.style.display = 'none'
       elLogin.style.display = 'block'
       return

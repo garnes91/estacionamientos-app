@@ -139,27 +139,42 @@
   <h1>Panel del operador</h1>
   <div style="display:flex; align-items:center; gap:0.75rem;">
     <span id="estado-conexion">Conectando…</span>
-    <button id="btn-config">Configuración de Firebase</button>
+    <button id="btn-config" style="display:none;">URL de función de facturación</button>
+    <button id="btn-logout" style="display:none;">Cerrar sesión</button>
   </div>
 </header>
+
+<div id="login" style="display:none; max-width:360px; margin:3rem auto; text-align:left;">
+  <h2 style="margin-top:0;">Iniciar sesión</h2>
+  <p class="hint">Con el correo y contraseña que te dio el operador del estacionamiento.</p>
+  <div style="margin-bottom:0.75rem;">
+    <label>Correo</label>
+    <input id="login-email" type="text" autocomplete="username" />
+  </div>
+  <div style="margin-bottom:0.75rem;">
+    <label>Contraseña</label>
+    <input id="login-password" type="password" autocomplete="current-password" />
+  </div>
+  <p id="login-error" style="color:var(--status-critical); font-size:0.85rem;"></p>
+  <button class="primario" id="btn-login">Entrar</button>
+</div>
 
 <nav class="tabs" id="tabs-nav" style="display:none;">
   <button class="tab" data-tab="estado">Estado</button>
   <button class="tab" data-tab="configuracion">Configuración</button>
   <button class="tab" data-tab="facturacion">Facturación global</button>
+  <button class="tab" data-tab="administracion" id="tab-administracion" style="display:none;">Administración</button>
 </nav>
 
 <main>
   <div id="config" style="display:none;">
-    <h2 style="margin-top:0;">Configuración</h2>
-    <p>Pega el objeto <code>firebaseConfig</code> (Consola de Firebase → Configuración del proyecto → Tus apps).</p>
-    <textarea id="config-texto" placeholder='{"apiKey": "...", "authDomain": "...", "projectId": "...", ...}'></textarea>
-    <p style="margin-top:0.75rem;">URL de la función <code>crearFacturaGlobalMensual</code> (solo hace falta para la
+    <h2 style="margin-top:0;">URL de función de facturación</h2>
+    <p>URL de la función <code>crearFacturaGlobalMensual</code> (solo hace falta para la
       pestaña "Facturación global" — aparece al hacer <code>firebase deploy --only functions</code>, o en la consola
       de Firebase → Functions):</p>
     <input id="url-funcion-texto" type="text" placeholder="https://us-central1-tu-proyecto.cloudfunctions.net/crearFacturaGlobalMensual" />
     <p id="config-error"></p>
-    <button class="primario" id="btn-guardar-config" style="margin-top:0.75rem;">Guardar y conectar</button>
+    <button class="primario" id="btn-guardar-config" style="margin-top:0.75rem;">Guardar</button>
   </div>
 
   <!-- ================= Estado ================= -->
@@ -209,55 +224,115 @@
       <div id="series-contenido"></div>
     </div>
   </div>
+
+  <!-- ================= Administración (solo super admin) ================= -->
+  <div id="vista-administracion" class="vista">
+    <h2 style="margin-top:0;">Socios</h2>
+    <div class="tarjeta">
+      <h3 style="margin-top:0;">+ Nuevo socio</h3>
+      <div class="fila">
+        <div>
+          <label>Nombre</label>
+          <input id="socio-nombre" type="text" />
+        </div>
+        <div>
+          <label>Correo</label>
+          <input id="socio-email" type="text" />
+        </div>
+        <div>
+          <label>Contraseña temporal</label>
+          <input id="socio-password" type="text" />
+        </div>
+      </div>
+      <button class="primario" id="btn-crear-socio">Crear socio</button>
+      <p class="resultado" id="resultado-nuevo-socio"></p>
+    </div>
+
+    <div id="lista-socios"></div>
+    <p id="vacio-socios" class="hint" style="display:none;">Todavía no has dado de alta a ningún socio.</p>
+
+    <h2>Asignar estacionamientos</h2>
+    <p class="hint">Cada estacionamiento solo lo ve el socio asignado (y tú). "Sin asignar" = solo lo ves tú.</p>
+    <div id="tarjetas-asignacion"></div>
+  </div>
 </main>
 
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js'
-  import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js'
-  import { getFirestore, doc, collection, onSnapshot, updateDoc } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js'
+  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js'
+  import { getFirestore, doc, collection, query, where, onSnapshot, updateDoc } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js'
+  import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js'
 
-  const CLAVE_CONFIG = 'estacionamientos-panel-operador-config'
+  // Mismo proyecto Firebase que portal-facturacion/index.html — la apiKey es
+  // pública por diseño (identifica el proyecto, no autoriza nada por sí
+  // sola), así que va fija en vez de pedirle a cada socio que la pegue.
+  const firebaseConfig = {
+    apiKey: 'AIzaSyADAnOwZ6_X1zP6kTzaved2iEUFp2cCV8I',
+    authDomain: 'parkio-d6289.firebaseapp.com',
+    projectId: 'parkio-d6289',
+    storageBucket: 'parkio-d6289.firebasestorage.app',
+    messagingSenderId: '901942264083',
+    appId: '1:901942264083:web:9c2aeef76dc865db851ae6',
+    measurementId: 'G-5QH07FZXZ6'
+  }
+
+  // Debe coincidir con functions/src/superAdmin.ts y con el que está
+  // hardcodeado en firestore.rules.
+  const SUPER_ADMIN_UID = 'CWNhpqZAmZhfXrKxjtmrYWrTpbf2'
+
   const CLAVE_URL_FUNCION = 'estacionamientos-panel-operador-url-funcion'
   // Debe coincidir con BLOQUES_CONFIGURABLES en src/logic/motorTarifas.ts del repo principal.
   const BLOQUES_CONFIGURABLES = 24
 
   const elEstadoConexion = document.getElementById('estado-conexion')
   const elTabsNav = document.getElementById('tabs-nav')
+  const elBtnConfig = document.getElementById('btn-config')
+  const elBtnLogout = document.getElementById('btn-logout')
   const elConfig = document.getElementById('config')
-  const elConfigTexto = document.getElementById('config-texto')
   const elUrlFuncionTexto = document.getElementById('url-funcion-texto')
   const elConfigError = document.getElementById('config-error')
+  const elLogin = document.getElementById('login')
+  const elLoginEmail = document.getElementById('login-email')
+  const elLoginPassword = document.getElementById('login-password')
+  const elLoginError = document.getElementById('login-error')
+  const elBtnLogin = document.getElementById('btn-login')
 
-  // La consola de Firebase muestra el config como literal de JS (claves sin
-  // comillas), no JSON estricto.
-  function interpretarConfigFirebase(texto) {
-    const limpio = texto.trim()
-    try { return JSON.parse(limpio) } catch {}
-    const envuelto = limpio.startsWith('{') ? limpio : `{${limpio}}`
-    return Function(`"use strict"; return (${envuelto});`)()
-  }
+  const app = initializeApp(firebaseConfig)
+  const auth = getAuth(app)
+  const db = getFirestore(app)
+  const functions = getFunctions(app)
+  let urlFuncion = localStorage.getItem(CLAVE_URL_FUNCION) || null
 
-  document.getElementById('btn-config').addEventListener('click', () => {
-    elConfigTexto.value = localStorage.getItem(CLAVE_CONFIG) || ''
-    elUrlFuncionTexto.value = localStorage.getItem(CLAVE_URL_FUNCION) || ''
+  elBtnConfig.addEventListener('click', () => {
+    elUrlFuncionTexto.value = urlFuncion || ''
+    elConfigError.textContent = ''
     elConfig.style.display = 'block'
   })
 
   document.getElementById('btn-guardar-config').addEventListener('click', () => {
+    const urlFuncionTexto = elUrlFuncionTexto.value.trim()
+    if (urlFuncionTexto && !urlFuncionTexto.startsWith('https://')) {
+      elConfigError.textContent = 'La URL de la función debe empezar con https://'
+      return
+    }
+    localStorage.setItem(CLAVE_URL_FUNCION, urlFuncionTexto)
+    urlFuncion = urlFuncionTexto
+    elConfig.style.display = 'none'
+  })
+
+  elBtnLogin.addEventListener('click', async () => {
+    elLoginError.textContent = ''
+    elBtnLogin.disabled = true
     try {
-      const config = interpretarConfigFirebase(elConfigTexto.value)
-      if (!config.apiKey || !config.projectId) throw new Error('Falta apiKey o projectId')
-      const urlFuncionTexto = elUrlFuncionTexto.value.trim()
-      if (urlFuncionTexto && !urlFuncionTexto.startsWith('https://')) {
-        throw new Error('La URL de la función debe empezar con https://')
-      }
-      localStorage.setItem(CLAVE_CONFIG, JSON.stringify(config))
-      localStorage.setItem(CLAVE_URL_FUNCION, urlFuncionTexto)
-      location.reload()
+      await signInWithEmailAndPassword(auth, elLoginEmail.value.trim(), elLoginPassword.value)
     } catch (e) {
-      elConfigError.textContent = `No se pudo guardar (${e.message}).`
+      elLoginError.textContent = 'No se pudo entrar — revisa tu correo y contraseña.'
+    } finally {
+      elBtnLogin.disabled = false
     }
   })
+
+  elBtnLogout.addEventListener('click', () => signOut(auth))
 
   // ---- Pestañas ----
   function mostrarTab(nombre) {
@@ -266,10 +341,6 @@
     document.querySelectorAll('.tabs button').forEach((btn) => btn.classList.toggle('activo', btn.dataset.tab === nombre))
   }
   document.querySelectorAll('.tabs button').forEach((btn) => btn.addEventListener('click', () => mostrarTab(btn.dataset.tab)))
-
-  let db = null
-  let auth = null
-  let urlFuncion = null
 
   // ================= Estado (dashboard) =================
   const elTarjetasEstado = document.getElementById('tarjetas-estado')
@@ -871,48 +942,176 @@
     })
   }
 
-  // ================= Arranque =================
-  async function iniciar() {
-    const configTexto = localStorage.getItem(CLAVE_CONFIG)
-    urlFuncion = localStorage.getItem(CLAVE_URL_FUNCION) || null
-    if (!configTexto) {
-      elConfig.style.display = 'block'
-      elEstadoConexion.textContent = 'Sin configurar'
-      return
-    }
+  // ================= Administración (solo super admin) =================
+  const elTabAdministracion = document.getElementById('tab-administracion')
+  const elListaSocios = document.getElementById('lista-socios')
+  const elVacioSocios = document.getElementById('vacio-socios')
+  const elTarjetasAsignacion = document.getElementById('tarjetas-asignacion')
+  const elSocioNombre = document.getElementById('socio-nombre')
+  const elSocioEmail = document.getElementById('socio-email')
+  const elSocioPassword = document.getElementById('socio-password')
+  const elBtnCrearSocio = document.getElementById('btn-crear-socio')
+  const elResultadoNuevoSocio = document.getElementById('resultado-nuevo-socio')
+  const crearSocioCallable = httpsCallable(functions, 'crearSocio')
 
-    try {
-      const firebaseConfig = JSON.parse(configTexto)
-      const app = initializeApp(firebaseConfig)
-      auth = getAuth(app)
-      await signInAnonymously(auth)
-      db = getFirestore(app)
+  let ultimoSnapshotSocios = null
 
-      elEstadoConexion.textContent = 'Conectado'
-      elTabsNav.style.display = 'flex'
-      mostrarTab('estado')
-      mostrarListaConfig()
-      mostrarListaFacturacion()
+  function renderizarAsignaciones() {
+    if (!ultimoSnapshotEstado || !ultimoSnapshotSocios) return
+    elTarjetasAsignacion.innerHTML = ''
+    const socios = ultimoSnapshotSocios.docs.map((d) => ({ uid: d.id, ...d.data() }))
+    const ordenados = [...ultimoSnapshotEstado.docs].sort((a, b) => (a.data().nombre || a.id).localeCompare(b.data().nombre || b.id))
 
-      onSnapshot(
-        collection(db, 'estacionamientos'),
-        (snapshot) => {
-          ultimoSnapshotEstado = snapshot
-          renderizarTarjetasEstado(snapshot)
-          renderizarListaEstacionamientos(elTarjetasConfig, elVacioConfig, snapshot, abrirEditorConfig)
-          renderizarListaEstacionamientos(elTarjetasFacturacion, elVacioFacturacion, snapshot, abrirFacturacion)
-        },
-        (error) => { elEstadoConexion.textContent = `Error de conexión: ${error.message}` }
-      )
-    } catch (error) {
-      elEstadoConexion.textContent = 'Error de configuración'
-      elConfig.style.display = 'block'
-      elConfigTexto.value = configTexto
-      elConfigError.textContent = String(error.message || error)
+    for (const docSnap of ordenados) {
+      const datos = docSnap.data()
+      const div = document.createElement('div')
+      div.className = 'tarjeta fila'
+
+      const info = document.createElement('div')
+      info.style.flex = '2'
+      info.innerHTML = `<div style="font-weight:600;">${datos.nombre ?? docSnap.id}</div><div class="hint">${docSnap.id}</div>`
+
+      const select = document.createElement('select')
+      const optionSinAsignar = document.createElement('option')
+      optionSinAsignar.value = ''
+      optionSinAsignar.textContent = 'Sin asignar (solo tú)'
+      select.appendChild(optionSinAsignar)
+      for (const socio of socios) {
+        const option = document.createElement('option')
+        option.value = socio.uid
+        option.textContent = socio.nombre
+        select.appendChild(option)
+      }
+      select.value = datos.ownerUid || ''
+      select.addEventListener('change', async () => {
+        select.disabled = true
+        try {
+          await updateDoc(doc(db, 'estacionamientos', docSnap.id), { ownerUid: select.value || null })
+        } catch (e) {
+          alert(`No se pudo asignar: ${e.message}`)
+          select.value = datos.ownerUid || ''
+        } finally {
+          select.disabled = false
+        }
+      })
+
+      div.appendChild(info)
+      div.appendChild(select)
+      elTarjetasAsignacion.appendChild(div)
     }
   }
 
-  iniciar()
+  function renderizarListaSocios() {
+    elListaSocios.innerHTML = ''
+    if (ultimoSnapshotSocios.empty) {
+      elVacioSocios.style.display = 'block'
+    } else {
+      elVacioSocios.style.display = 'none'
+      const ordenados = [...ultimoSnapshotSocios.docs].sort((a, b) => (a.data().nombre || '').localeCompare(b.data().nombre || ''))
+      for (const docSnap of ordenados) {
+        const datos = docSnap.data()
+        const div = document.createElement('div')
+        div.className = 'tarjeta'
+        div.innerHTML = `<div style="font-weight:600;">${datos.nombre}</div><div class="hint">${datos.email}</div>`
+        elListaSocios.appendChild(div)
+      }
+    }
+    renderizarAsignaciones()
+  }
+
+  elBtnCrearSocio.addEventListener('click', async () => {
+    const nombre = elSocioNombre.value.trim()
+    const email = elSocioEmail.value.trim()
+    const password = elSocioPassword.value
+    if (!nombre || !email || !password) {
+      elResultadoNuevoSocio.className = 'resultado error'
+      elResultadoNuevoSocio.textContent = 'Completa nombre, correo y contraseña.'
+      return
+    }
+    elBtnCrearSocio.disabled = true
+    elResultadoNuevoSocio.className = 'resultado'
+    elResultadoNuevoSocio.textContent = 'Creando…'
+    try {
+      await crearSocioCallable({ nombre, email, password })
+      elResultadoNuevoSocio.className = 'resultado exito'
+      elResultadoNuevoSocio.textContent = `Listo — ${nombre} ya puede entrar con ese correo y esa contraseña.`
+      elSocioNombre.value = ''
+      elSocioEmail.value = ''
+      elSocioPassword.value = ''
+    } catch (e) {
+      elResultadoNuevoSocio.className = 'resultado error'
+      elResultadoNuevoSocio.textContent = `Error: ${e.message}`
+    } finally {
+      elBtnCrearSocio.disabled = false
+    }
+  })
+
+  // ================= Arranque =================
+  let desuscribirEstado = null
+  let desuscribirSocios = null
+
+  function limpiarSesion() {
+    if (desuscribirEstado) { desuscribirEstado(); desuscribirEstado = null }
+    if (desuscribirSocios) { desuscribirSocios(); desuscribirSocios = null }
+    ultimoSnapshotEstado = null
+    ultimoSnapshotSocios = null
+    mostrarListaConfig()
+    mostrarListaFacturacion()
+  }
+
+  onAuthStateChanged(auth, (user) => {
+    limpiarSesion()
+
+    // Sesiones anónimas de antes de "socios" ya no pueden listar
+    // estacionamientos (ver firestore.rules) — se cierran solas para que el
+    // panel pida el login real.
+    if (user && user.isAnonymous) {
+      signOut(auth)
+      return
+    }
+
+    if (!user) {
+      elEstadoConexion.textContent = 'Sin iniciar sesión'
+      elTabsNav.style.display = 'none'
+      elBtnConfig.style.display = 'none'
+      elBtnLogout.style.display = 'none'
+      elLogin.style.display = 'block'
+      return
+    }
+
+    elLogin.style.display = 'none'
+    elEstadoConexion.textContent = user.email || 'Conectado'
+    elTabsNav.style.display = 'flex'
+    elBtnConfig.style.display = 'inline-block'
+    elBtnLogout.style.display = 'inline-block'
+
+    const esSuperAdmin = user.uid === SUPER_ADMIN_UID
+    elTabAdministracion.style.display = esSuperAdmin ? 'inline-block' : 'none'
+    mostrarTab('estado')
+
+    const consultaEstacionamientos = esSuperAdmin
+      ? collection(db, 'estacionamientos')
+      : query(collection(db, 'estacionamientos'), where('ownerUid', '==', user.uid))
+
+    desuscribirEstado = onSnapshot(
+      consultaEstacionamientos,
+      (snapshot) => {
+        ultimoSnapshotEstado = snapshot
+        renderizarTarjetasEstado(snapshot)
+        renderizarListaEstacionamientos(elTarjetasConfig, elVacioConfig, snapshot, abrirEditorConfig)
+        renderizarListaEstacionamientos(elTarjetasFacturacion, elVacioFacturacion, snapshot, abrirFacturacion)
+        if (esSuperAdmin) renderizarAsignaciones()
+      },
+      (error) => { elEstadoConexion.textContent = `Error de conexión: ${error.message}` }
+    )
+
+    if (esSuperAdmin) {
+      desuscribirSocios = onSnapshot(collection(db, 'socios'), (snapshot) => {
+        ultimoSnapshotSocios = snapshot
+        renderizarListaSocios()
+      })
+    }
+  })
 </script>
 
 </body>

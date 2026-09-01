@@ -4,6 +4,7 @@ import { db } from './firestore'
 import { obtenerSecretosFacturacion } from './secretosFacturacion'
 
 export { crearFacturaGlobalMensual } from './facturaGlobalMensual'
+export { crearSocio } from './socios'
 
 interface ReceptorInput {
   rfc: string

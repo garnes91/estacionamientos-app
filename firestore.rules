@@ -12,21 +12,51 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // UID del super admin (tú) — debe coincidir con SUPER_ADMIN_UID en
+    // functions/src/superAdmin.ts y con el valor hardcodeado en
+    // panel-operador/index.html. Se obtiene creando tu propio usuario a
+    // mano en Firebase Console → Authentication → Add user.
+    function esSuperAdmin() {
+      return request.auth != null && request.auth.uid == 'CWNhpqZAmZhfXrKxjtmrYWrTpbf2';
+    }
+
     match /estacionamientos/{slug} {
-      // Lee/escribe el documento de estado (dashboard, panel-remoto,
-      // heartbeat.ts) — cualquier usuario autenticado, incluida la auth
-      // anónima que ya usa la app.
-      allow read, write: if request.auth != null;
+      // get/write de un doc conocido por su slug: cualquier sesión
+      // autenticada, incluida la anónima — es el camino que usa la app de
+      // escritorio (heartbeat.ts) para su latido/config. Sin cambios de
+      // superficie respecto a como funcionaba antes de "socios".
+      allow get, write: if request.auth != null;
+
+      // list (consultar la colección completa, lo que hace
+      // panel-operador/index.html) exige ser el super admin, o ser el
+      // dueño Y que la consulta ya venga filtrada por su propio uid
+      // (where('ownerUid','==', auth.uid)) — si el cliente no filtra,
+      // Firestore rechaza la consulta completa. La auth anónima nunca
+      // puede listar, así que no alcanza a enumerar estacionamientos
+      // ajenos con solo la apiKey pública.
+      allow list: if request.auth != null &&
+        request.auth.token.firebase.sign_in_provider != 'anonymous' && (
+          esSuperAdmin() ||
+          ('ownerUid' in resource.data && resource.data.ownerUid == request.auth.uid)
+        );
 
       // Boletos cerrados pendientes de facturar (facturacionSync.ts). Solo
       // el backend de facturación (Cloud Functions, vía Admin SDK) puede
       // tocarlos — el Admin SDK ignora estas reglas, así que "deny all"
-      // aquí es exactamente lo que se busca: ningún cliente (dashboard,
-      // panel-remoto, portal público, ni nadie con la API key) puede leer
-      // o alterar montos/estado de facturación directamente.
+      // aquí es exactamente lo que se busca: ningún cliente (panel-operador,
+      // portal público, ni nadie con la API key) puede leer o alterar
+      // montos/estado de facturación directamente.
       match /boletosFacturables/{codigoImpreso} {
         allow read, write: if false;
       }
+    }
+
+    // Metadatos de socios (email/nombre) — los escribe solo la Cloud
+    // Function crearSocio (Admin SDK); el super admin puede leerlos para
+    // llenar la pestaña "Administración" del panel.
+    match /socios/{uid} {
+      allow read: if esSuperAdmin();
+      allow write: if false;
     }
 
     // Secretos de facturación (organizationId + Secret Key de FacturAPI por

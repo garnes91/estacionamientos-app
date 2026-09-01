@@ -88,7 +88,7 @@
     margin-bottom: 1rem;
   }
   label { display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.2rem; }
-  input[type="text"], input[type="number"], textarea, select {
+  input[type="text"], input[type="email"], input[type="password"], input[type="number"], textarea, select {
     width: 100%;
     font: inherit;
     padding: 0.4rem;
@@ -145,7 +145,7 @@
   </div>
 </header>
 
-<div id="login" style="display:none; max-width:360px; margin:3rem auto; text-align:left;">
+<div id="login" class="tarjeta" style="display:none; max-width:360px; margin:3rem auto; text-align:left;">
   <h2 style="margin-top:0;">Iniciar sesión</h2>
   <p class="hint">Con el correo y contraseña que te dio el operador del estacionamiento.</p>
   <div style="margin-bottom:0.75rem;">
@@ -162,7 +162,7 @@
   <p id="reset-mensaje" class="hint"></p>
 </div>
 
-<div id="cambiar-password" style="display:none; max-width:360px; margin:3rem auto; text-align:left;">
+<div id="cambiar-password" class="tarjeta" style="display:none; max-width:360px; margin:3rem auto; text-align:left;">
   <h2 style="margin-top:0;">Cambiar contraseña</h2>
   <div style="margin-bottom:0.75rem;">
     <label>Contraseña actual</label>
@@ -189,7 +189,7 @@
 </nav>
 
 <main>
-  <div id="config" style="display:none;">
+  <div id="config" class="tarjeta" style="display:none; max-width:600px; margin:0 auto;">
     <h2 style="margin-top:0;">URL de función de facturación</h2>
     <p>URL de la función <code>crearFacturaGlobalMensual</code> (solo hace falta para la
       pestaña "Facturación global" — aparece al hacer <code>firebase deploy --only functions</code>, o en la consola

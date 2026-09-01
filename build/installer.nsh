@@ -21,3 +21,13 @@
 
 !macro customUnInstallCheckCurrentUser
 !macroend
+
+; quitAndInstall cierra la app y lanza este instalador casi al mismo
+; tiempo — a veces Windows todavía no soltó el .exe viejo cuando el
+; instalador ya intenta sobrescribirlo, y sale un error de "archivo en
+; uso" que hay que cancelar a mano para que el instalador reintente y
+; siga. Esta pausa al arrancar le da tiempo a Windows de soltarlo antes
+; de llegar ahí.
+!macro customInit
+  Sleep 2000
+!macroend

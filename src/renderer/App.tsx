@@ -110,6 +110,9 @@ function App(): ReactElement {
           <button onClick={instalarActualizacion} style={{ padding: '0.25rem 0.75rem' }}>
             Actualizar ahora
           </button>
+          <span style={{ opacity: 0.75 }}>
+            Si Windows muestra un aviso durante la instalación, dale clic en "Cancelar" (no "Reintentar").
+          </span>
         </div>
       )}
     </>

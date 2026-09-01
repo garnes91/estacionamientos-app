@@ -1052,6 +1052,7 @@
   const elBtnCrearSocio = document.getElementById('btn-crear-socio')
   const elResultadoNuevoSocio = document.getElementById('resultado-nuevo-socio')
   const crearSocioCallable = httpsCallable(functions, 'crearSocio')
+  const eliminarSocioCallable = httpsCallable(functions, 'eliminarSocio')
 
   let ultimoSnapshotSocios = null
 
@@ -1110,12 +1111,39 @@
       for (const docSnap of ordenados) {
         const datos = docSnap.data()
         const div = document.createElement('div')
-        div.className = 'tarjeta'
-        div.innerHTML = `<div style="font-weight:600;">${datos.nombre}</div><div class="hint">${datos.email}</div>`
+        div.className = 'tarjeta tarjeta-encabezado'
+
+        const info = document.createElement('div')
+        info.innerHTML = `<div style="font-weight:600;">${datos.nombre}</div><div class="hint">${datos.email}</div>`
+
+        const btnEliminar = document.createElement('button')
+        btnEliminar.className = 'peligro'
+        btnEliminar.textContent = 'Eliminar'
+        btnEliminar.addEventListener('click', () => eliminarSocio(docSnap.id, datos.nombre, btnEliminar))
+
+        div.appendChild(info)
+        div.appendChild(btnEliminar)
         elListaSocios.appendChild(div)
       }
     }
     renderizarAsignaciones()
+  }
+
+  async function eliminarSocio(uid, nombre, boton) {
+    if (
+      !confirm(
+        `¿Eliminar a "${nombre}"? Pierde el acceso de inmediato y sus estacionamientos quedan sin asignar (solo tú los ves). Si fue un error de captura, puedes volver a crearlo después con los datos correctos.`
+      )
+    ) {
+      return
+    }
+    boton.disabled = true
+    try {
+      await eliminarSocioCallable({ uid })
+    } catch (e) {
+      alert(`No se pudo eliminar: ${e.message}`)
+      boton.disabled = false
+    }
   }
 
   elBtnCrearSocio.addEventListener('click', async () => {

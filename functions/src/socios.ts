@@ -46,3 +46,47 @@ export const crearSocio = onCall(async (request) => {
 
   return { uid }
 })
+
+interface EliminarSocioInput {
+  uid: string
+}
+
+/**
+ * Da de baja a un socio — típicamente porque se creó con un dato mal
+ * capturado y hay que rehacerlo. Libera primero sus estacionamientos (vuelven
+ * a "sin asignar", solo los ve el super admin) para que no queden apuntando
+ * a un uid que ya no existe, y hasta el final borra la cuenta de Auth.
+ */
+export const eliminarSocio = onCall(async (request) => {
+  if (request.auth?.uid !== SUPER_ADMIN_UID) {
+    throw new HttpsError('permission-denied', 'Solo el super admin puede eliminar socios')
+  }
+
+  const { uid } = (request.data ?? {}) as Partial<EliminarSocioInput>
+  if (!uid) {
+    throw new HttpsError('invalid-argument', 'Falta el uid del socio')
+  }
+  if (uid === SUPER_ADMIN_UID) {
+    throw new HttpsError('invalid-argument', 'No puedes eliminar la cuenta del super admin')
+  }
+
+  const asignadosSnap = await db.collection('estacionamientos').where('ownerUid', '==', uid).get()
+  const lote = db.batch()
+  for (const doc of asignadosSnap.docs) {
+    lote.update(doc.ref, { ownerUid: null })
+  }
+  lote.delete(db.doc(`socios/${uid}`))
+  await lote.commit()
+
+  try {
+    await getAuth().deleteUser(uid)
+  } catch (error) {
+    console.error(`[socios] error al eliminar el usuario de Firebase Auth ${uid}:`, error)
+    throw new HttpsError(
+      'internal',
+      'Se liberaron sus estacionamientos, pero no se pudo borrar la cuenta de acceso — contacta soporte.'
+    )
+  }
+
+  return { ok: true }
+})

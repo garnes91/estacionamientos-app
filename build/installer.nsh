@@ -23,11 +23,33 @@
 !macroend
 
 ; quitAndInstall cierra la app y lanza este instalador casi al mismo
-; tiempo — a veces Windows todavía no soltó el .exe viejo cuando el
-; instalador ya intenta sobrescribirlo, y sale un error de "archivo en
-; uso" que hay que cancelar a mano para que el instalador reintente y
-; siga. Esta pausa al arrancar le da tiempo a Windows de soltarlo antes
-; de llegar ahí.
+; tiempo. El diálogo "no se puede cerrar la app" NO viene del chequeo de
+; arriba (ya es un no-op) — viene de uninstallOldVersion (interno de
+; electron-builder, sin hook público para desactivarlo), que reintenta
+; correr el desinstalador de la versión anterior hasta 5 veces y, si el
+; .exe viejo sigue bloqueado en todas, muestra ese diálogo. Una pausa fija
+; de 2s no bastó en la práctica (probado en una VM con antivirus, donde el
+; archivo recién descargado puede seguir bloqueado más tiempo) — en vez de
+; adivinar cuánto esperar, se reintenta activamente hasta que Windows
+; suelta el .exe (o hasta 20s, por si nunca se libera del todo).
 !macro customInit
-  Sleep 2000
+  IfFileExists "$INSTDIR\${APP_EXECUTABLE_FILENAME}" 0 estacionamientos_fin_espera
+  StrCpy $R9 0
+
+  estacionamientos_bucle_espera:
+    ClearErrors
+    FileOpen $R8 "$INSTDIR\${APP_EXECUTABLE_FILENAME}" a
+    IfErrors estacionamientos_sigue_bloqueado estacionamientos_archivo_libre
+
+    estacionamientos_sigue_bloqueado:
+      IntOp $R9 $R9 + 1
+      IntCmp $R9 20 estacionamientos_fin_espera estacionamientos_reintentar estacionamientos_fin_espera
+      estacionamientos_reintentar:
+        Sleep 1000
+        Goto estacionamientos_bucle_espera
+
+    estacionamientos_archivo_libre:
+      FileClose $R8
+
+  estacionamientos_fin_espera:
 !macroend

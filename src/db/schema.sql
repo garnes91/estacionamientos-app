@@ -23,6 +23,9 @@ CREATE TABLE IF NOT EXISTS estacionamientos (
   -- mano por instalación desde la configuración de admin; NULL hasta
   -- entonces.
   texto_boleto  TEXT,
+  -- Cargo fijo extra que se suma al cobro normal cuando el cliente perdió
+  -- su boleto de papel (ver cerrarBoletoPerdido en src/db/boletos.ts).
+  cargo_boleto_perdido REAL NOT NULL DEFAULT 0,
   activo        INTEGER NOT NULL DEFAULT 1 CHECK (activo IN (0, 1)),
   created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
@@ -150,6 +153,11 @@ CREATE TABLE IF NOT EXISTS boletos (
   monto_cobrado         REAL,
   excedente_minutos     INTEGER,
   excedente_monto       REAL,
+  -- Se marca cuando se cerró vía "Boleto perdido" (ver
+  -- cerrarBoletoPerdido) — monto_cobrado ya incluye recargo_boleto_perdido,
+  -- igual que ya incluye excedente_monto.
+  boleto_perdido        INTEGER NOT NULL DEFAULT 0 CHECK (boleto_perdido IN (0, 1)),
+  recargo_boleto_perdido REAL,
   estado                TEXT NOT NULL DEFAULT 'abierto' CHECK (estado IN ('abierto', 'cerrado', 'cancelado')),
   usuario_emision_id    INTEGER NOT NULL REFERENCES usuarios(id),
   usuario_cobro_id      INTEGER REFERENCES usuarios(id),

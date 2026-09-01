@@ -741,11 +741,13 @@ function TabSeries({ estacionamientoId, avisar, avisarError }: TabProps): ReactE
 function TabTextoBoleto({ estacionamientoId, avisar, avisarError }: TabProps): ReactElement {
   const [nombre, setNombre] = useState('')
   const [texto, setTexto] = useState('')
+  const [cargoBoletoPerdido, setCargoBoletoPerdido] = useState(0)
 
   useEffect(() => {
     window.api.estacionamientoActual().then((e) => {
       setNombre(e.nombre)
       setTexto(e.textoBoleto ?? '')
+      setCargoBoletoPerdido(e.cargoBoletoPerdido)
     })
   }, [estacionamientoId])
 
@@ -762,6 +764,15 @@ function TabTextoBoleto({ estacionamientoId, avisar, avisarError }: TabProps): R
     try {
       await window.api.admin.estacionamiento.actualizarTextoBoleto({ estacionamientoId, texto: texto.trim() || null })
       avisar('Texto del boleto guardado')
+    } catch (e) {
+      avisarError(e)
+    }
+  }
+
+  async function guardarCargoBoletoPerdido(): Promise<void> {
+    try {
+      await window.api.admin.estacionamiento.actualizarCargoBoletoPerdido({ estacionamientoId, monto: cargoBoletoPerdido })
+      avisar('Cargo por boleto perdido guardado')
     } catch (e) {
       avisarError(e)
     }
@@ -795,6 +806,25 @@ function TabTextoBoleto({ estacionamientoId, avisar, avisarError }: TabProps): R
       <button onClick={guardarTexto} style={{ marginTop: '0.5rem' }}>
         Guardar
       </button>
+
+      <h3>Cargo por boleto perdido</h3>
+      <p style={{ color: '#666', fontSize: '0.85rem' }}>
+        Monto fijo que se suma al cobro normal cuando el operador cierra un vehículo con el botón "Boleto perdido"
+        (pantalla Boletos abiertos), en vez del folio impreso.
+      </p>
+      <div style={{ display: 'flex', gap: '0.5rem', maxWidth: 240 }}>
+        <input
+          style={{ ...inputStyle, flex: 1 }}
+          type="number"
+          min={0}
+          step="0.01"
+          value={cargoBoletoPerdido}
+          onChange={(e) => setCargoBoletoPerdido(Number(e.target.value))}
+        />
+        <button onClick={guardarCargoBoletoPerdido} disabled={cargoBoletoPerdido < 0}>
+          Guardar
+        </button>
+      </div>
     </div>
   )
 }

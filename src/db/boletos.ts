@@ -145,6 +145,7 @@ export interface BoletoCerrado {
   monto: number
   excedenteMinutos?: number
   excedenteMonto?: number
+  recargoBoletoPerdido?: number
 }
 
 interface BoletoRow {
@@ -152,9 +153,34 @@ interface BoletoRow {
   serie: string
   folio: number
   estado: string
+  estacionamiento_id: number
   hora_entrada: string
   tarifa_progresiva_id: number
   tarifa_plana_id: number | null
+}
+
+function obtenerBoletoAbierto(db: DB, boletoId: number): BoletoRow {
+  const boleto = db
+    .prepare<[number], BoletoRow>(
+      `SELECT id, serie, folio, estado, estacionamiento_id, hora_entrada, tarifa_progresiva_id, tarifa_plana_id
+       FROM boletos WHERE id = ?`
+    )
+    .get(boletoId)
+
+  if (!boleto) {
+    throw new Error(`No existe el boleto ${boletoId}`)
+  }
+  if (boleto.estado !== 'abierto') {
+    throw new Error(`El boleto ${boleto.serie}-${boleto.folio} ya está ${boleto.estado}`)
+  }
+  return boleto
+}
+
+function calcularDetalleCobro(db: DB, boleto: BoletoRow, horaSalida: Date) {
+  const tarifaRegular = obtenerTarifaProgresiva(db, boleto.tarifa_progresiva_id)
+  const tarifaPlana = boleto.tarifa_plana_id ? obtenerTarifaPlana(db, boleto.tarifa_plana_id) : null
+  const horaEntrada = new Date(boleto.hora_entrada)
+  return calcularCobro(horaEntrada, horaSalida, tarifaRegular, tarifaPlana)
 }
 
 /**
@@ -164,26 +190,9 @@ interface BoletoRow {
  */
 export function cerrarBoleto(db: DB, input: CierreBoletoInput): BoletoCerrado {
   const transaccion = db.transaction((): BoletoCerrado => {
-    const boleto = db
-      .prepare<[number], BoletoRow>(
-        `SELECT id, serie, folio, estado, hora_entrada, tarifa_progresiva_id, tarifa_plana_id
-         FROM boletos WHERE id = ?`
-      )
-      .get(input.boletoId)
-
-    if (!boleto) {
-      throw new Error(`No existe el boleto ${input.boletoId}`)
-    }
-    if (boleto.estado !== 'abierto') {
-      throw new Error(`El boleto ${boleto.serie}-${boleto.folio} ya está ${boleto.estado}`)
-    }
-
-    const tarifaRegular = obtenerTarifaProgresiva(db, boleto.tarifa_progresiva_id)
-    const tarifaPlana = boleto.tarifa_plana_id ? obtenerTarifaPlana(db, boleto.tarifa_plana_id) : null
-
-    const horaEntrada = new Date(boleto.hora_entrada)
+    const boleto = obtenerBoletoAbierto(db, input.boletoId)
     const horaSalida = new Date()
-    const detalle = calcularCobro(horaEntrada, horaSalida, tarifaRegular, tarifaPlana)
+    const detalle = calcularDetalleCobro(db, boleto, horaSalida)
 
     db.prepare(
       `UPDATE boletos
@@ -210,6 +219,58 @@ export function cerrarBoleto(db: DB, input: CierreBoletoInput): BoletoCerrado {
       monto: detalle.monto,
       excedenteMinutos: detalle.excedenteMinutos,
       excedenteMonto: detalle.excedenteMonto
+    }
+  })
+
+  return transaccion()
+}
+
+/**
+ * Cierra un boleto perdido: igual que cerrarBoleto, pero suma el cargo fijo
+ * configurado (estacionamientos.cargo_boleto_perdido) al cobro normal y
+ * marca boleto_perdido/recargo_boleto_perdido para dejar rastro de que fue
+ * una excepción — el monto se configura en Admin, pestaña "Estacionamiento"
+ * (ver actualizarCargoBoletoPerdido en src/db/estacionamientos.ts).
+ */
+export function cerrarBoletoPerdido(db: DB, input: CierreBoletoInput): BoletoCerrado {
+  const transaccion = db.transaction((): BoletoCerrado => {
+    const boleto = obtenerBoletoAbierto(db, input.boletoId)
+    const horaSalida = new Date()
+    const detalle = calcularDetalleCobro(db, boleto, horaSalida)
+
+    const fila = db
+      .prepare<[number], { cargo_boleto_perdido: number }>('SELECT cargo_boleto_perdido FROM estacionamientos WHERE id = ?')
+      .get(boleto.estacionamiento_id)
+    const recargo = fila?.cargo_boleto_perdido ?? 0
+    const montoTotal = detalle.monto + recargo
+
+    db.prepare(
+      `UPDATE boletos
+       SET hora_salida = ?, minutos_totales = ?, monto_cobrado = ?, excedente_minutos = ?, excedente_monto = ?,
+           estado = 'cerrado', usuario_cobro_id = ?, boleto_perdido = 1, recargo_boleto_perdido = ?
+       WHERE id = ?`
+    ).run(
+      horaSalida.toISOString(),
+      detalle.minutosTotales,
+      montoTotal,
+      detalle.excedenteMinutos ?? null,
+      detalle.excedenteMonto ?? null,
+      input.usuarioCobroId,
+      recargo,
+      boleto.id
+    )
+
+    return {
+      id: boleto.id,
+      serie: boleto.serie,
+      folio: boleto.folio,
+      horaSalida: horaSalida.toISOString(),
+      minutosTotales: detalle.minutosTotales,
+      tipoCobro: detalle.tipoCobro,
+      monto: montoTotal,
+      excedenteMinutos: detalle.excedenteMinutos,
+      excedenteMonto: detalle.excedenteMonto,
+      recargoBoletoPerdido: recargo
     }
   })
 

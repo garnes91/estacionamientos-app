@@ -18,12 +18,14 @@ export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactEl
   const [estacionamientoId, setEstacionamientoId] = useState<number | null>(null)
   const [nombreEstacionamiento, setNombreEstacionamiento] = useState('')
   const [textoBoleto, setTextoBoleto] = useState<string | null>(null)
+  const [cargoBoletoPerdido, setCargoBoletoPerdido] = useState(0)
   const [claveFolio, setClaveFolio] = useState('')
   const [boletos, setBoletos] = useState<BoletoListado[]>([])
   const [cobrandoId, setCobrandoId] = useState<number | null>(null)
   const [ultimoCobro, setUltimoCobro] = useState<DatosReciboCobro | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [preguntandoImprimirRecibo, setPreguntandoImprimirRecibo] = useState(false)
+  const [boletoPerdidoId, setBoletoPerdidoId] = useState<number | null>(null)
   const justoCobradoRef = useRef(false)
 
   async function cargar(estId: number): Promise<void> {
@@ -35,6 +37,7 @@ export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactEl
       setEstacionamientoId(e.id)
       setNombreEstacionamiento(e.nombre)
       setTextoBoleto(e.textoBoleto)
+      setCargoBoletoPerdido(e.cargoBoletoPerdido)
       setClaveFolio(e.claveFolio)
       cargar(e.id).catch((err) => setError(String(err)))
     })
@@ -56,12 +59,14 @@ export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactEl
     setPreguntandoImprimirRecibo(true)
   }, [ultimoCobro])
 
-  async function cobrar(boletoId: number): Promise<void> {
+  async function cerrar(boletoId: number, perdido: boolean): Promise<void> {
     if (!estacionamientoId) return
     setCobrandoId(boletoId)
     setError(null)
     try {
-      const cierre = await window.api.cerrarBoleto({ estacionamientoId, boletoId })
+      const cierre = perdido
+        ? await window.api.cerrarBoletoPerdido({ estacionamientoId, boletoId })
+        : await window.api.cerrarBoleto({ estacionamientoId, boletoId })
       justoCobradoRef.current = true
       setUltimoCobro({
         estacionamientoNombre: nombreEstacionamiento,
@@ -72,7 +77,8 @@ export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactEl
         minutosTotales: cierre.minutosTotales,
         monto: cierre.monto,
         excedenteMinutos: cierre.excedenteMinutos,
-        excedenteMonto: cierre.excedenteMonto
+        excedenteMonto: cierre.excedenteMonto,
+        recargoBoletoPerdido: cierre.recargoBoletoPerdido
       })
       await cargar(estacionamientoId)
     } catch (e) {
@@ -80,6 +86,10 @@ export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactEl
     } finally {
       setCobrandoId(null)
     }
+  }
+
+  function cobrar(boletoId: number): void {
+    cerrar(boletoId, false)
   }
 
   return (
@@ -111,9 +121,12 @@ export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactEl
                   <td>{b.tipoVehiculo}</td>
                   <td>{b.placa ?? '—'}</td>
                   <td>{new Date(b.horaEntrada).toLocaleString()}</td>
-                  <td>
+                  <td style={{ display: 'flex', gap: '0.5rem' }}>
                     <button onClick={() => cobrar(b.id)} disabled={cobrandoId === b.id}>
                       Cobrar
+                    </button>
+                    <button onClick={() => setBoletoPerdidoId(b.id)} disabled={cobrandoId === b.id}>
+                      Boleto perdido
                     </button>
                   </td>
                 </tr>
@@ -162,6 +175,18 @@ export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactEl
           </div>
         )}
       </div>
+
+      {boletoPerdidoId !== null && (
+        <ConfirmModal
+          mensaje={`¿Cerrar como boleto perdido? Se cobra lo normal más un recargo de $${cargoBoletoPerdido.toFixed(2)}.`}
+          onSi={() => {
+            const id = boletoPerdidoId
+            setBoletoPerdidoId(null)
+            cerrar(id, true)
+          }}
+          onNo={() => setBoletoPerdidoId(null)}
+        />
+      )}
 
       {preguntandoImprimirRecibo && (
         <ConfirmModal

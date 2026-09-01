@@ -11,6 +11,7 @@ export interface DatosReciboCobro {
   monto: number
   excedenteMinutos?: number
   excedenteMonto?: number
+  recargoBoletoPerdido?: number
 }
 
 /**
@@ -21,7 +22,11 @@ export interface DatosReciboCobro {
  */
 export function ReciboCobro({ datos, claveFolio }: { datos: DatosReciboCobro; claveFolio: string }): ReactElement {
   const textoFolio = formatearFolio(datos.serie, datos.folio, claveFolio)
-  const montoFijo = datos.tipoCobro === 'plana' ? datos.monto - (datos.excedenteMonto ?? 0) : null
+  const recargoBoletoPerdido = datos.recargoBoletoPerdido ?? 0
+  // El desglose por tiempo/tarifa plana es siempre sobre el cálculo normal —
+  // el recargo por boleto perdido se muestra aparte, no mezclado ahí.
+  const montoSinRecargo = datos.monto - recargoBoletoPerdido
+  const montoFijo = datos.tipoCobro === 'plana' ? montoSinRecargo - (datos.excedenteMonto ?? 0) : null
 
   return (
     <div id="recibo-cobro" style={{ width: '76mm', fontFamily: 'monospace', fontSize: 12, lineHeight: 1.4 }}>
@@ -35,7 +40,7 @@ export function ReciboCobro({ datos, claveFolio }: { datos: DatosReciboCobro; cl
       <hr />
       {datos.tipoCobro === 'regular' ? (
         <div>
-          Tiempo: {datos.minutosTotales} min — ${datos.monto.toFixed(2)}
+          Tiempo: {datos.minutosTotales} min — ${montoSinRecargo.toFixed(2)}
         </div>
       ) : (
         <>
@@ -47,6 +52,7 @@ export function ReciboCobro({ datos, claveFolio }: { datos: DatosReciboCobro; cl
           ) : null}
         </>
       )}
+      {recargoBoletoPerdido ? <div>Recargo boleto perdido: ${recargoBoletoPerdido.toFixed(2)}</div> : null}
       <hr />
       <div style={{ fontWeight: 'bold', textAlign: 'right' }}>Total: ${datos.monto.toFixed(2)}</div>
     </div>

@@ -7,6 +7,7 @@ import { autenticar } from '../db/usuarios'
 import { listarTarifasPlanas } from '../db/tarifasPlanas'
 import {
   cerrarBoleto,
+  cerrarBoletoPerdido,
   cobrarBoletoPorFolio,
   emitirBoleto,
   listarBoletosAbiertos,
@@ -111,6 +112,14 @@ export function registrarIpc(): void {
     const db = obtenerDb()
     const usuario = requerirUsuarioActual()
     const cierre = cerrarBoleto(db, { boletoId: params.boletoId, usuarioCobroId: usuario.id })
+    sincronizarBoletoCerrado(db, params.estacionamientoId, cierre)
+    return cierre
+  })
+
+  ipcMain.handle('boletos:cerrarPerdido', (_evento, params: { estacionamientoId: number; boletoId: number }) => {
+    const db = obtenerDb()
+    const usuario = requerirUsuarioActual()
+    const cierre = cerrarBoletoPerdido(db, { boletoId: params.boletoId, usuarioCobroId: usuario.id })
     sincronizarBoletoCerrado(db, params.estacionamientoId, cierre)
     return cierre
   })

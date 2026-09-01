@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { abrirDb, DB } from './index'
 import { sembrarSiVacio } from './seed'
-import { actualizarNombreEstacionamiento, actualizarTextoBoleto, obtenerEstacionamientoActual } from './estacionamientos'
+import {
+  actualizarCargoBoletoPerdido,
+  actualizarNombreEstacionamiento,
+  actualizarTextoBoleto,
+  obtenerEstacionamientoActual
+} from './estacionamientos'
 
 let db: DB
 let estacionamientoId: number
@@ -43,5 +48,20 @@ describe('actualizarNombreEstacionamiento', () => {
   it('rechaza un nombre vacío o solo espacios', () => {
     expect(() => actualizarNombreEstacionamiento(db, estacionamientoId, '')).toThrow('no puede quedar vacío')
     expect(() => actualizarNombreEstacionamiento(db, estacionamientoId, '   ')).toThrow('no puede quedar vacío')
+  })
+})
+
+describe('actualizarCargoBoletoPerdido', () => {
+  it('empieza en 0 (sin configurar)', () => {
+    expect(obtenerEstacionamientoActual(db).cargoBoletoPerdido).toBe(0)
+  })
+
+  it('guarda el monto y se refleja en obtenerEstacionamientoActual', () => {
+    actualizarCargoBoletoPerdido(db, estacionamientoId, 75)
+    expect(obtenerEstacionamientoActual(db).cargoBoletoPerdido).toBe(75)
+  })
+
+  it('rechaza un monto negativo', () => {
+    expect(() => actualizarCargoBoletoPerdido(db, estacionamientoId, -10)).toThrow('no puede ser negativo')
   })
 })

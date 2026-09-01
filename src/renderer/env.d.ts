@@ -41,6 +41,7 @@ interface BoletoCerradoApi {
   monto: number
   excedenteMinutos?: number
   excedenteMonto?: number
+  recargoBoletoPerdido?: number
 }
 
 interface UsuarioApi {
@@ -257,6 +258,7 @@ declare global {
         id: number
         nombre: string
         textoBoleto: string | null
+        cargoBoletoPerdido: number
         claveFolio: string
       }>
       login: (params: { nombreUsuario: string; password: string }) => Promise<UsuarioApi>
@@ -274,6 +276,7 @@ declare global {
       }) => Promise<BoletoEmitidoApi>
       listarBoletosAbiertos: (estacionamientoId: number) => Promise<BoletoListadoApi[]>
       cerrarBoleto: (params: { estacionamientoId: number; boletoId: number }) => Promise<BoletoCerradoApi>
+      cerrarBoletoPerdido: (params: { estacionamientoId: number; boletoId: number }) => Promise<BoletoCerradoApi>
       cobrarBoletoPorFolio: (params: {
         estacionamientoId: number
         serie: string
@@ -350,6 +353,7 @@ declare global {
         estacionamiento: {
           actualizarTextoBoleto: (params: { estacionamientoId: number; texto: string | null }) => Promise<void>
           actualizarNombre: (params: { estacionamientoId: number; nombre: string }) => Promise<void>
+          actualizarCargoBoletoPerdido: (params: { estacionamientoId: number; monto: number }) => Promise<void>
         }
         tarifasPlanas: {
           listar: (estacionamientoId: number) => Promise<TarifaPlanaAdminApi[]>

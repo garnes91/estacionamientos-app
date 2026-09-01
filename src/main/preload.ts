@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('boletos:listarAbiertos', estacionamientoId),
   cerrarBoleto: (params: { estacionamientoId: number; boletoId: number }) =>
     ipcRenderer.invoke('boletos:cerrar', params),
+  cerrarBoletoPerdido: (params: { estacionamientoId: number; boletoId: number }) =>
+    ipcRenderer.invoke('boletos:cerrarPerdido', params),
   cobrarBoletoPorFolio: (params: { estacionamientoId: number; serie: string; folio: number }) =>
     ipcRenderer.invoke('boletos:cobrarPorFolio', params),
   resumen: (estacionamientoId: number) => ipcRenderer.invoke('boletos:resumen', estacionamientoId),
@@ -112,7 +114,9 @@ contextBridge.exposeInMainWorld('api', {
       actualizarTextoBoleto: (params: { estacionamientoId: number; texto: string | null }) =>
         ipcRenderer.invoke('admin:estacionamiento:actualizarTextoBoleto', params),
       actualizarNombre: (params: { estacionamientoId: number; nombre: string }) =>
-        ipcRenderer.invoke('admin:estacionamiento:actualizarNombre', params)
+        ipcRenderer.invoke('admin:estacionamiento:actualizarNombre', params),
+      actualizarCargoBoletoPerdido: (params: { estacionamientoId: number; monto: number }) =>
+        ipcRenderer.invoke('admin:estacionamiento:actualizarCargoBoletoPerdido', params)
     },
     tarifasPlanas: {
       listar: (estacionamientoId: number) => ipcRenderer.invoke('admin:tarifasPlanas:listar', estacionamientoId),

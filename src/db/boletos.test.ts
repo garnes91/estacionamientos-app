@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { abrirDb, DB } from './index'
 import { sembrarSiVacio } from './seed'
-import { obtenerEstacionamientoActual } from './estacionamientos'
+import { actualizarCargoBoletoPerdido, obtenerEstacionamientoActual } from './estacionamientos'
 import { obtenerUsuarioPorDefecto } from './usuarios'
 import { listarTiposVehiculo } from './tiposVehiculo'
 import {
   buscarBoletoAbiertoPorFolio,
   cerrarBoleto,
+  cerrarBoletoPerdido,
   cobrarBoletoPorFolio,
   emitirBoleto,
   listarBoletosAbiertos,
@@ -184,6 +185,47 @@ describe('cerrarBoleto', () => {
     cerrarBoleto(db, { boletoId: emitido.id, usuarioCobroId: usuarioId })
 
     expect(() => cerrarBoleto(db, { boletoId: emitido.id, usuarioCobroId: usuarioId })).toThrow('ya está cerrado')
+  })
+})
+
+describe('cerrarBoletoPerdido', () => {
+  it('suma el cargo configurado al cobro normal y lo marca como perdido', () => {
+    actualizarCargoBoletoPerdido(db, estacionamientoId, 50)
+    const emitido = emitirBoleto(db, { estacionamientoId, tipoVehiculoId: tipoAutoId, usuarioEmisionId: usuarioId })
+    backdatar(db, emitido.id, 60)
+
+    const cierre = cerrarBoletoPerdido(db, { boletoId: emitido.id, usuarioCobroId: usuarioId })
+
+    expect(cierre.monto).toBe(90) // $40 de tarifa regular (1h) + $50 de recargo
+    expect(cierre.recargoBoletoPerdido).toBe(50)
+
+    const fila = db.prepare('SELECT boleto_perdido, recargo_boleto_perdido FROM boletos WHERE id = ?').get(emitido.id) as {
+      boleto_perdido: number
+      recargo_boleto_perdido: number
+    }
+    expect(fila.boleto_perdido).toBe(1)
+    expect(fila.recargo_boleto_perdido).toBe(50)
+  })
+
+  it('sin cargo configurado (default 0), cobra igual que cerrarBoleto', () => {
+    const emitido = emitirBoleto(db, { estacionamientoId, tipoVehiculoId: tipoAutoId, usuarioEmisionId: usuarioId })
+    backdatar(db, emitido.id, 60)
+
+    const cierre = cerrarBoletoPerdido(db, { boletoId: emitido.id, usuarioCobroId: usuarioId })
+    expect(cierre.monto).toBe(40)
+    expect(cierre.recargoBoletoPerdido).toBe(0)
+  })
+
+  it('no aparece en listarBoletosAbiertos después de cerrarlo', () => {
+    actualizarCargoBoletoPerdido(db, estacionamientoId, 50)
+    const emitido = emitirBoleto(db, { estacionamientoId, tipoVehiculoId: tipoAutoId, usuarioEmisionId: usuarioId })
+
+    cerrarBoletoPerdido(db, { boletoId: emitido.id, usuarioCobroId: usuarioId })
+    expect(listarBoletosAbiertos(db, estacionamientoId)).toHaveLength(0)
+  })
+
+  it('lanza error si el boleto no existe', () => {
+    expect(() => cerrarBoletoPerdido(db, { boletoId: 9999, usuarioCobroId: usuarioId })).toThrow('No existe el boleto')
   })
 })
 

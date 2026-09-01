@@ -4,12 +4,16 @@ export interface Estacionamiento {
   id: number
   nombre: string
   textoBoleto: string | null
+  cargoBoletoPerdido: number
 }
 
 /** Cada instalación administra un solo estacionamiento: el primero activo. */
 export function obtenerEstacionamientoActual(db: DB): Estacionamiento {
   const fila = db
-    .prepare('SELECT id, nombre, texto_boleto AS textoBoleto FROM estacionamientos WHERE activo = 1 ORDER BY id LIMIT 1')
+    .prepare(
+      `SELECT id, nombre, texto_boleto AS textoBoleto, cargo_boleto_perdido AS cargoBoletoPerdido
+       FROM estacionamientos WHERE activo = 1 ORDER BY id LIMIT 1`
+    )
     .get() as Estacionamiento | undefined
 
   if (!fila) {
@@ -21,6 +25,14 @@ export function obtenerEstacionamientoActual(db: DB): Estacionamiento {
 
 export function actualizarTextoBoleto(db: DB, estacionamientoId: number, texto: string | null): void {
   db.prepare('UPDATE estacionamientos SET texto_boleto = ? WHERE id = ?').run(texto, estacionamientoId)
+}
+
+/** Cargo fijo extra que se suma al cobro normal al cerrar un "boleto perdido". */
+export function actualizarCargoBoletoPerdido(db: DB, estacionamientoId: number, monto: number): void {
+  if (monto < 0) {
+    throw new Error('El cargo por boleto perdido no puede ser negativo')
+  }
+  db.prepare('UPDATE estacionamientos SET cargo_boleto_perdido = ? WHERE id = ?').run(monto, estacionamientoId)
 }
 
 /**

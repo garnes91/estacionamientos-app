@@ -140,6 +140,7 @@
   <div style="display:flex; align-items:center; gap:0.75rem;">
     <span id="estado-conexion">Conectando…</span>
     <button id="btn-config" style="display:none;">URL de función de facturación</button>
+    <button id="btn-cambiar-password" style="display:none;">Cambiar contraseña</button>
     <button id="btn-logout" style="display:none;">Cerrar sesión</button>
   </div>
 </header>
@@ -157,6 +158,27 @@
   </div>
   <p id="login-error" style="color:var(--status-critical); font-size:0.85rem;"></p>
   <button class="primario" id="btn-login">Entrar</button>
+  <button id="btn-olvide-password" style="background:none; border:none; color:var(--accent); cursor:pointer; padding:0.5rem 0; display:block;">¿Olvidaste tu contraseña?</button>
+  <p id="reset-mensaje" class="hint"></p>
+</div>
+
+<div id="cambiar-password" style="display:none; max-width:360px; margin:3rem auto; text-align:left;">
+  <h2 style="margin-top:0;">Cambiar contraseña</h2>
+  <div style="margin-bottom:0.75rem;">
+    <label>Contraseña actual</label>
+    <input id="password-actual" type="password" autocomplete="current-password" />
+  </div>
+  <div style="margin-bottom:0.75rem;">
+    <label>Contraseña nueva</label>
+    <input id="password-nueva" type="password" autocomplete="new-password" />
+  </div>
+  <div style="margin-bottom:0.75rem;">
+    <label>Confirmar contraseña nueva</label>
+    <input id="password-nueva-confirmar" type="password" autocomplete="new-password" />
+  </div>
+  <p id="password-error" style="color:var(--status-critical); font-size:0.85rem;"></p>
+  <p id="password-exito" style="color:var(--status-good); font-size:0.85rem;"></p>
+  <button class="primario" id="btn-guardar-password">Guardar contraseña</button>
 </div>
 
 <nav class="tabs" id="tabs-nav" style="display:none;">
@@ -259,7 +281,10 @@
 
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js'
-  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js'
+  import {
+    getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut,
+    sendPasswordResetEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider
+  } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js'
   import { getFirestore, doc, collection, query, where, onSnapshot, updateDoc } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js'
   import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js'
 
@@ -296,6 +321,17 @@
   const elLoginPassword = document.getElementById('login-password')
   const elLoginError = document.getElementById('login-error')
   const elBtnLogin = document.getElementById('btn-login')
+  const elBtnOlvidePassword = document.getElementById('btn-olvide-password')
+  const elResetMensaje = document.getElementById('reset-mensaje')
+
+  const elBtnCambiarPassword = document.getElementById('btn-cambiar-password')
+  const elCambiarPassword = document.getElementById('cambiar-password')
+  const elPasswordActual = document.getElementById('password-actual')
+  const elPasswordNueva = document.getElementById('password-nueva')
+  const elPasswordNuevaConfirmar = document.getElementById('password-nueva-confirmar')
+  const elPasswordError = document.getElementById('password-error')
+  const elPasswordExito = document.getElementById('password-exito')
+  const elBtnGuardarPassword = document.getElementById('btn-guardar-password')
 
   const app = initializeApp(firebaseConfig)
   const auth = getAuth(app)
@@ -332,7 +368,70 @@
     }
   })
 
+  elBtnOlvidePassword.addEventListener('click', async () => {
+    const email = elLoginEmail.value.trim()
+    if (!email) {
+      elResetMensaje.textContent = 'Escribe tu correo arriba primero.'
+      return
+    }
+    elResetMensaje.textContent = 'Enviando…'
+    try {
+      await sendPasswordResetEmail(auth, email)
+      elResetMensaje.textContent = 'Listo — revisa tu correo para restablecer tu contraseña.'
+    } catch (e) {
+      elResetMensaje.textContent = 'No se pudo enviar el correo — revisa que esté bien escrito.'
+    }
+  })
+
   elBtnLogout.addEventListener('click', () => signOut(auth))
+
+  elBtnCambiarPassword.addEventListener('click', () => {
+    elPasswordActual.value = ''
+    elPasswordNueva.value = ''
+    elPasswordNuevaConfirmar.value = ''
+    elPasswordError.textContent = ''
+    elPasswordExito.textContent = ''
+    elCambiarPassword.style.display = 'block'
+  })
+
+  elBtnGuardarPassword.addEventListener('click', async () => {
+    elPasswordError.textContent = ''
+    elPasswordExito.textContent = ''
+    const actual = elPasswordActual.value
+    const nueva = elPasswordNueva.value
+    const confirmar = elPasswordNuevaConfirmar.value
+
+    if (!actual || !nueva) {
+      elPasswordError.textContent = 'Completa tu contraseña actual y la nueva.'
+      return
+    }
+    if (nueva.length < 6) {
+      elPasswordError.textContent = 'La contraseña nueva debe tener al menos 6 caracteres.'
+      return
+    }
+    if (nueva !== confirmar) {
+      elPasswordError.textContent = 'Las dos contraseñas nuevas no coinciden.'
+      return
+    }
+
+    elBtnGuardarPassword.disabled = true
+    try {
+      const credencial = EmailAuthProvider.credential(auth.currentUser.email, actual)
+      await reauthenticateWithCredential(auth.currentUser, credencial)
+      await updatePassword(auth.currentUser, nueva)
+      elPasswordExito.textContent = 'Listo — tu contraseña ya cambió.'
+      elPasswordActual.value = ''
+      elPasswordNueva.value = ''
+      elPasswordNuevaConfirmar.value = ''
+    } catch (e) {
+      elPasswordError.textContent =
+        e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password'
+          ? 'Tu contraseña actual no es correcta.'
+          : `No se pudo cambiar: ${e.message}`
+    } finally {
+      elBtnGuardarPassword.disabled = false
+    }
+  })
 
   // ---- Pestañas ----
   function mostrarTab(nombre) {
@@ -1074,7 +1173,9 @@
       elEstadoConexion.textContent = 'Sin iniciar sesión'
       elTabsNav.style.display = 'none'
       elBtnConfig.style.display = 'none'
+      elBtnCambiarPassword.style.display = 'none'
       elBtnLogout.style.display = 'none'
+      elCambiarPassword.style.display = 'none'
       elLogin.style.display = 'block'
       return
     }
@@ -1083,6 +1184,7 @@
     elEstadoConexion.textContent = user.email || 'Conectado'
     elTabsNav.style.display = 'flex'
     elBtnConfig.style.display = 'inline-block'
+    elBtnCambiarPassword.style.display = 'inline-block'
     elBtnLogout.style.display = 'inline-block'
 
     const esSuperAdmin = user.uid === SUPER_ADMIN_UID

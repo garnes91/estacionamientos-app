@@ -21,11 +21,18 @@ service cloud.firestore {
     }
 
     match /estacionamientos/{slug} {
-      // get/write de un doc conocido por su slug: cualquier sesión
+      // get/create/update de un doc conocido por su slug: cualquier sesión
       // autenticada, incluida la anónima — es el camino que usa la app de
       // escritorio (heartbeat.ts) para su latido/config. Sin cambios de
       // superficie respecto a como funcionaba antes de "socios".
-      allow get, write: if request.auth != null;
+      allow get, create, update: if request.auth != null;
+
+      // delete: solo el super admin (botón "Eliminar" en la pestaña
+      // Administración) — antes quedaba cubierto por el "write" de arriba,
+      // lo que dejaba a cualquier sesión autenticada (incluido un socio que
+      // adivinara el slug de otro) borrar el documento de monitoreo de
+      // cualquier estacionamiento ajeno.
+      allow delete: if esSuperAdmin();
 
       // list (consultar la colección completa, lo que hace
       // panel-operador/index.html) exige ser el super admin, o ser el

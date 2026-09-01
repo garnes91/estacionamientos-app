@@ -295,7 +295,7 @@
     getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut,
     sendPasswordResetEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider
   } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js'
-  import { getFirestore, doc, collection, query, where, onSnapshot, updateDoc } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js'
+  import { getFirestore, doc, collection, query, where, onSnapshot, updateDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js'
   import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js'
 
   // Mismo proyecto Firebase que portal-facturacion/index.html — la apiKey es
@@ -1105,9 +1105,34 @@
         }
       })
 
+      const btnEliminarEstacionamiento = document.createElement('button')
+      btnEliminarEstacionamiento.className = 'peligro'
+      btnEliminarEstacionamiento.textContent = 'Eliminar'
+      btnEliminarEstacionamiento.addEventListener('click', () =>
+        eliminarEstacionamiento(docSnap.id, datos.nombre, btnEliminarEstacionamiento)
+      )
+
       div.appendChild(info)
       div.appendChild(select)
+      div.appendChild(btnEliminarEstacionamiento)
       elTarjetasAsignacion.appendChild(div)
+    }
+  }
+
+  async function eliminarEstacionamiento(slug, nombre, boton) {
+    if (
+      !confirm(
+        `¿Eliminar "${nombre ?? slug}" (${slug}) del panel? Esto solo borra el documento de monitoreo/estado — no afecta la base de datos local de esa app ni sus boletos/cortes. Úsalo para quitar pruebas o duplicados. Si esa app sigue mandando latidos, va a volver a aparecer.`
+      )
+    ) {
+      return
+    }
+    boton.disabled = true
+    try {
+      await deleteDoc(doc(db, 'estacionamientos', slug))
+    } catch (e) {
+      alert(`No se pudo eliminar: ${e.message}`)
+      boton.disabled = false
     }
   }
 

@@ -5,7 +5,8 @@
     "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
   },
   "hosting": {
-    "public": "portal-facturacion",
+    "target": "panel",
+    "public": "public",
     "ignore": ["firebase.json", "**/.*"]
   },
   "firestore": {

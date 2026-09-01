@@ -2,6 +2,14 @@
   "projects": {
     "default": "parkio-d6289"
   },
-  "targets": {},
+  "targets": {
+    "parkio-d6289": {
+      "hosting": {
+        "panel": [
+          "parkflowmx"
+        ]
+      }
+    }
+  },
   "etags": {}
 }

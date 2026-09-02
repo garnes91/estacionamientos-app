@@ -299,13 +299,39 @@ function buscarBoletoPorFolioCualquierEstado(
 }
 
 /**
+ * Se lanza cuando el MISMO boleto ya cerrado se vuelve a escanear 2+ veces
+ * — un solo reintento puede ser un despiste, pero 2+ es la señal de un
+ * boleto reciclado a propósito (ver avisarRecobroSospechoso en
+ * src/main/recobroSospechoso.ts). boletoId/intentos van en propiedades,
+ * no en el mensaje, para que quien atrape el error no tenga que parsearlo.
+ */
+export class RecobroSospechosoError extends Error {
+  boletoId: number
+  intentos: number
+  usuarioId: number
+
+  constructor(message: string, boletoId: number, intentos: number, usuarioId: number) {
+    super(message)
+    this.name = 'RecobroSospechosoError'
+    this.boletoId = boletoId
+    this.intentos = intentos
+    this.usuarioId = usuarioId
+  }
+}
+
+/**
  * Deja rastro de que alguien volvió a escanear un boleto que ya no está
  * abierto — no bloquea el escaneo (solo se le informa al operador), pero
  * queda registrado para poder revisar el patrón después (folios que se
  * reescanean seguido, o siempre el mismo usuario) desde intentos_recobro.
+ * Devuelve cuántos intentos lleva ese boleto en total, contando este.
  */
-function registrarIntentoRecobro(db: DB, boletoId: number, usuarioId: number): void {
+function registrarIntentoRecobro(db: DB, boletoId: number, usuarioId: number): number {
   db.prepare('INSERT INTO intentos_recobro (boleto_id, usuario_id) VALUES (?, ?)').run(boletoId, usuarioId)
+  const { n } = db.prepare('SELECT COUNT(*) AS n FROM intentos_recobro WHERE boleto_id = ?').get(boletoId) as {
+    n: number
+  }
+  return n
 }
 
 /** Cobra directamente por serie+folio (lo que entrega el escáner en la salida). */
@@ -318,13 +344,47 @@ export function cobrarBoletoPorFolio(db: DB, input: CobroPorFolioInput): BoletoC
   const existente = buscarBoletoPorFolioCualquierEstado(db, input.estacionamientoId, input.serie, input.folio)
   if (existente) {
     if (existente.estado === 'cerrado') {
-      registrarIntentoRecobro(db, existente.id, input.usuarioCobroId)
-      throw new Error(`Este boleto (${input.serie}-${input.folio}) ya fue cobrado antes.`)
+      const intentos = registrarIntentoRecobro(db, existente.id, input.usuarioCobroId)
+      const mensaje = `Este boleto (${input.serie}-${input.folio}) ya fue cobrado antes.`
+      if (intentos >= 2) {
+        throw new RecobroSospechosoError(mensaje, existente.id, intentos, input.usuarioCobroId)
+      }
+      throw new Error(mensaje)
     }
     throw new Error(`Este boleto (${input.serie}-${input.folio}) está cancelado.`)
   }
 
   throw new Error(`No existe ningún boleto con folio ${input.serie}-${input.folio} en este estacionamiento.`)
+}
+
+export interface DetalleIntentoRecobro {
+  serie: string
+  folio: number
+  tipoVehiculo: string
+  nombreUsuario: string
+  intentos: number
+}
+
+/** Todo lo que necesita el mensaje de alerta (correo/Firestore) para un boleto con recobro sospechoso. */
+export function obtenerDetalleIntentoRecobro(db: DB, boletoId: number, usuarioId: number): DetalleIntentoRecobro {
+  const fila = db
+    .prepare<
+      [number, number],
+      { serie: string; folio: number; tipoVehiculo: string; nombreUsuario: string; intentos: number }
+    >(
+      `SELECT b.serie, b.folio, tv.nombre AS tipoVehiculo,
+              (SELECT nombre_completo FROM usuarios WHERE id = ?) AS nombreUsuario,
+              (SELECT COUNT(*) FROM intentos_recobro WHERE boleto_id = b.id) AS intentos
+       FROM boletos b
+       JOIN tipos_vehiculo tv ON tv.id = b.tipo_vehiculo_id
+       WHERE b.id = ?`
+    )
+    .get(usuarioId, boletoId)
+
+  if (!fila) {
+    throw new Error(`No existe el boleto ${boletoId}`)
+  }
+  return fila
 }
 
 export interface Resumen {

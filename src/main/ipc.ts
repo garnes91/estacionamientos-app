@@ -11,7 +11,8 @@ import {
   cobrarBoletoPorFolio,
   emitirBoleto,
   listarBoletosAbiertos,
-  obtenerResumen
+  obtenerResumen,
+  RecobroSospechosoError
 } from '../db/boletos'
 import { hacerCorte, listarCortes, obtenerDetalleCorte } from '../db/cortes'
 import { obtenerCorteMensual } from '../db/corteMensual'
@@ -27,6 +28,7 @@ import {
 import { CategoriaGasto, eliminarGasto, FormaPagoGasto, listarGastos, registrarGasto } from '../db/gastos'
 import { registrarIpcAdmin } from './ipcAdmin'
 import { sincronizarBoletoCerrado } from './facturacionSync'
+import { avisarRecobroSospechoso } from './recobroSospechoso'
 
 /** Registra los canales IPC que el renderer usa vía window.api (ver preload.ts). */
 export function registrarIpc(): void {
@@ -129,14 +131,25 @@ export function registrarIpc(): void {
     (_evento, params: { estacionamientoId: number; serie: string; folio: number }) => {
       const db = obtenerDb()
       const usuario = requerirUsuarioActual()
-      const cierre = cobrarBoletoPorFolio(db, {
-        estacionamientoId: params.estacionamientoId,
-        serie: params.serie,
-        folio: params.folio,
-        usuarioCobroId: usuario.id
-      })
-      sincronizarBoletoCerrado(db, params.estacionamientoId, cierre)
-      return cierre
+      try {
+        const cierre = cobrarBoletoPorFolio(db, {
+          estacionamientoId: params.estacionamientoId,
+          serie: params.serie,
+          folio: params.folio,
+          usuarioCobroId: usuario.id
+        })
+        sincronizarBoletoCerrado(db, params.estacionamientoId, cierre)
+        return cierre
+      } catch (error) {
+        // No demora la respuesta al operador en caja ni tumba el flujo si
+        // falla el correo/Firestore — se avisa en segundo plano.
+        if (error instanceof RecobroSospechosoError) {
+          avisarRecobroSospechoso(db, params.estacionamientoId, error).catch((err) =>
+            console.error('[recobro] error al avisar:', err)
+          )
+        }
+        throw error
+      }
     }
   )
 

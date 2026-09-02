@@ -11,7 +11,9 @@ import {
   cobrarBoletoPorFolio,
   emitirBoleto,
   listarBoletosAbiertos,
-  obtenerResumen
+  obtenerDetalleIntentoRecobro,
+  obtenerResumen,
+  RecobroSospechosoError
 } from './boletos'
 import { hacerCorte } from './cortes'
 
@@ -251,18 +253,40 @@ describe('cobrarBoletoPorFolio', () => {
     ).toThrow('No existe ningún boleto con folio Z-999')
   })
 
-  it('lanza un error distinto si el boleto ya fue cobrado, y deja registro en intentos_recobro', () => {
+  it('lanza un error normal (no sospechoso) en el primer reescaneo, y deja registro en intentos_recobro', () => {
     const emitido = emitirBoleto(db, { estacionamientoId, tipoVehiculoId: tipoAutoId, usuarioEmisionId: usuarioId })
     cobrarBoletoPorFolio(db, { estacionamientoId, serie: emitido.serie, folio: emitido.folio, usuarioCobroId: usuarioId })
 
-    expect(() =>
+    try {
       cobrarBoletoPorFolio(db, { estacionamientoId, serie: emitido.serie, folio: emitido.folio, usuarioCobroId: usuarioId })
-    ).toThrow('ya fue cobrado antes')
+      expect.unreachable()
+    } catch (e) {
+      expect(e).not.toBeInstanceOf(RecobroSospechosoError)
+      expect((e as Error).message).toContain('ya fue cobrado antes')
+    }
 
     const { n } = db.prepare('SELECT COUNT(*) AS n FROM intentos_recobro WHERE boleto_id = ?').get(emitido.id) as {
       n: number
     }
     expect(n).toBe(1)
+  })
+
+  it('lanza RecobroSospechosoError en el segundo reescaneo del mismo boleto (2+ intentos)', () => {
+    const emitido = emitirBoleto(db, { estacionamientoId, tipoVehiculoId: tipoAutoId, usuarioEmisionId: usuarioId })
+    cobrarBoletoPorFolio(db, { estacionamientoId, serie: emitido.serie, folio: emitido.folio, usuarioCobroId: usuarioId })
+    expect(() =>
+      cobrarBoletoPorFolio(db, { estacionamientoId, serie: emitido.serie, folio: emitido.folio, usuarioCobroId: usuarioId })
+    ).toThrow() // primer reescaneo, todavía no sospechoso
+
+    try {
+      cobrarBoletoPorFolio(db, { estacionamientoId, serie: emitido.serie, folio: emitido.folio, usuarioCobroId: usuarioId })
+      expect.unreachable()
+    } catch (e) {
+      expect(e).toBeInstanceOf(RecobroSospechosoError)
+      expect((e as RecobroSospechosoError).boletoId).toBe(emitido.id)
+      expect((e as RecobroSospechosoError).intentos).toBe(2)
+      expect((e as RecobroSospechosoError).usuarioId).toBe(usuarioId)
+    }
   })
 
   it('lanza un error distinto si el boleto está cancelado (sin registrar intento de recobro)', () => {
@@ -277,6 +301,31 @@ describe('cobrarBoletoPorFolio', () => {
       n: number
     }
     expect(n).toBe(0)
+  })
+})
+
+describe('obtenerDetalleIntentoRecobro', () => {
+  it('trae serie, folio, tipo de vehículo, usuario y el conteo de intentos', () => {
+    const emitido = emitirBoleto(db, { estacionamientoId, tipoVehiculoId: tipoAutoId, usuarioEmisionId: usuarioId })
+    cobrarBoletoPorFolio(db, { estacionamientoId, serie: emitido.serie, folio: emitido.folio, usuarioCobroId: usuarioId })
+    try {
+      cobrarBoletoPorFolio(db, { estacionamientoId, serie: emitido.serie, folio: emitido.folio, usuarioCobroId: usuarioId })
+    } catch {
+      // esperado — solo interesa el estado que deja, no el error en sí
+    }
+
+    const detalle = obtenerDetalleIntentoRecobro(db, emitido.id, usuarioId)
+    expect(detalle).toEqual({
+      serie: emitido.serie,
+      folio: emitido.folio,
+      tipoVehiculo: 'Auto',
+      nombreUsuario: 'Administrador',
+      intentos: 1
+    })
+  })
+
+  it('lanza error si el boleto no existe', () => {
+    expect(() => obtenerDetalleIntentoRecobro(db, 9999, usuarioId)).toThrow('No existe el boleto')
   })
 })
 

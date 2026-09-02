@@ -456,6 +456,95 @@
   const elVacioEstado = document.getElementById('vacio-estado')
   let ultimoSnapshotEstado = null
 
+  // ---- Alertas de boleto reciclado (estacionamientos/{slug}/alertasRecobro) ----
+  const alertasPorSlug = new Map()
+  const desuscribirAlertas = new Map()
+  let alertaAbiertaSlug = null
+
+  function suscribirAlertas(slug) {
+    if (desuscribirAlertas.has(slug)) return
+    const consulta = query(collection(db, 'estacionamientos', slug, 'alertasRecobro'), where('revisada', '==', false))
+    desuscribirAlertas.set(
+      slug,
+      onSnapshot(consulta, (snapshot) => {
+        alertasPorSlug.set(
+          slug,
+          snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))
+        )
+        if (ultimoSnapshotEstado) renderizarTarjetasEstado(ultimoSnapshotEstado)
+        if (alertaAbiertaSlug === slug) renderizarModalAlertas()
+      })
+    )
+  }
+
+  function limpiarAlertas() {
+    for (const desuscribir of desuscribirAlertas.values()) desuscribir()
+    desuscribirAlertas.clear()
+    alertasPorSlug.clear()
+    alertaAbiertaSlug = null
+  }
+
+  function abrirAlertas(slug) {
+    alertaAbiertaSlug = slug
+    renderizarModalAlertas()
+  }
+
+  function cerrarAlertas() {
+    alertaAbiertaSlug = null
+    renderizarModalAlertas()
+  }
+
+  async function marcarAlertaRevisada(slug, alertaId) {
+    try {
+      await updateDoc(doc(db, 'estacionamientos', slug, 'alertasRecobro', alertaId), { revisada: true })
+    } catch (e) {
+      alert(`No se pudo marcar como revisada: ${e.message}`)
+    }
+  }
+
+  function renderizarModalAlertas() {
+    let el = document.getElementById('modal-alertas')
+    if (!alertaAbiertaSlug) {
+      if (el) el.remove()
+      return
+    }
+    const alertas = alertasPorSlug.get(alertaAbiertaSlug) || []
+    if (!el) {
+      el = document.createElement('div')
+      el.id = 'modal-alertas'
+      el.style.cssText =
+        'position:fixed; inset:0; background:rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; z-index:1000;'
+      document.body.appendChild(el)
+    }
+    const filas = alertas
+      .map((a) => {
+        const fecha = a.detectadoEn?.toDate ? a.detectadoEn.toDate().toLocaleString() : ''
+        return `
+          <div class="fila-serie">
+            <div>
+              <div class="nombre">${a.serie}-${a.folio} (${a.tipoVehiculo})</div>
+              <div class="hint">${a.intentos} intentos — último: ${a.nombreUsuario}${fecha ? ` — ${fecha}` : ''}</div>
+            </div>
+            <button data-id="${a.id}">Marcar revisada</button>
+          </div>
+        `
+      })
+      .join('')
+    el.innerHTML = `
+      <div class="tarjeta" style="max-width:480px; width:90%; max-height:80vh; overflow:auto;">
+        <div class="tarjeta-encabezado">
+          <h3 style="margin:0;">Boletos reciclados</h3>
+          <button id="btn-cerrar-alertas">Cerrar</button>
+        </div>
+        ${alertas.length ? filas : '<p class="hint">Sin alertas pendientes.</p>'}
+      </div>
+    `
+    document.getElementById('btn-cerrar-alertas').addEventListener('click', cerrarAlertas)
+    el.querySelectorAll('button[data-id]').forEach((btn) => {
+      btn.addEventListener('click', () => marcarAlertaRevisada(alertaAbiertaSlug, btn.dataset.id))
+    })
+  }
+
   function formatearHace(fecha) {
     const segundos = Math.floor((Date.now() - fecha.getTime()) / 1000)
     if (segundos < 60) return `hace ${segundos}s`
@@ -503,6 +592,17 @@
       </div>
       <div class="actualizado">${actualizadoEn ? `Actualizado ${formatearHace(actualizadoEn)}` : 'Nunca reportó'}</div>
     `
+
+    const alertas = alertasPorSlug.get(slug) || []
+    if (alertas.length > 0) {
+      const btnAlerta = document.createElement('button')
+      btnAlerta.className = 'peligro'
+      btnAlerta.style.cssText = 'margin-top:0.5rem; width:100%;'
+      btnAlerta.textContent = `⚠ ${alertas.length} boleto${alertas.length > 1 ? 's' : ''} reciclado${alertas.length > 1 ? 's' : ''}`
+      btnAlerta.addEventListener('click', () => abrirAlertas(slug))
+      div.appendChild(btnAlerta)
+    }
+
     return div
   }
 
@@ -516,6 +616,7 @@
 
     const ordenados = [...snapshot.docs].sort((a, b) => (a.data().nombre || a.id).localeCompare(b.data().nombre || b.id))
     for (const docSnap of ordenados) {
+      suscribirAlertas(docSnap.id)
       elTarjetasEstado.appendChild(renderizarTarjetaEstado(docSnap.id, docSnap.data()))
     }
   }
@@ -1215,6 +1316,7 @@
   function limpiarSesion() {
     if (desuscribirEstado) { desuscribirEstado(); desuscribirEstado = null }
     if (desuscribirSocios) { desuscribirSocios(); desuscribirSocios = null }
+    limpiarAlertas()
     ultimoSnapshotEstado = null
     ultimoSnapshotSocios = null
     mostrarListaConfig()

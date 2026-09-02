@@ -284,13 +284,47 @@ export interface CobroPorFolioInput {
   usuarioCobroId: number
 }
 
+function buscarBoletoPorFolioCualquierEstado(
+  db: DB,
+  estacionamientoId: number,
+  serie: string,
+  folio: number
+): { id: number; estado: string } | null {
+  const fila = db
+    .prepare<[number, string, number], { id: number; estado: string }>(
+      'SELECT id, estado FROM boletos WHERE estacionamiento_id = ? AND serie = ? AND folio = ?'
+    )
+    .get(estacionamientoId, serie, folio)
+  return fila ?? null
+}
+
+/**
+ * Deja rastro de que alguien volvió a escanear un boleto que ya no está
+ * abierto — no bloquea el escaneo (solo se le informa al operador), pero
+ * queda registrado para poder revisar el patrón después (folios que se
+ * reescanean seguido, o siempre el mismo usuario) desde intentos_recobro.
+ */
+function registrarIntentoRecobro(db: DB, boletoId: number, usuarioId: number): void {
+  db.prepare('INSERT INTO intentos_recobro (boleto_id, usuario_id) VALUES (?, ?)').run(boletoId, usuarioId)
+}
+
 /** Cobra directamente por serie+folio (lo que entrega el escáner en la salida). */
 export function cobrarBoletoPorFolio(db: DB, input: CobroPorFolioInput): BoletoCerrado {
   const boleto = buscarBoletoAbiertoPorFolio(db, input.estacionamientoId, input.serie, input.folio)
-  if (!boleto) {
-    throw new Error(`No hay un boleto abierto con folio ${input.serie}-${input.folio}`)
+  if (boleto) {
+    return cerrarBoleto(db, { boletoId: boleto.id, usuarioCobroId: input.usuarioCobroId })
   }
-  return cerrarBoleto(db, { boletoId: boleto.id, usuarioCobroId: input.usuarioCobroId })
+
+  const existente = buscarBoletoPorFolioCualquierEstado(db, input.estacionamientoId, input.serie, input.folio)
+  if (existente) {
+    if (existente.estado === 'cerrado') {
+      registrarIntentoRecobro(db, existente.id, input.usuarioCobroId)
+      throw new Error(`Este boleto (${input.serie}-${input.folio}) ya fue cobrado antes.`)
+    }
+    throw new Error(`Este boleto (${input.serie}-${input.folio}) está cancelado.`)
+  }
+
+  throw new Error(`No existe ningún boleto con folio ${input.serie}-${input.folio} en este estacionamiento.`)
 }
 
 export interface Resumen {

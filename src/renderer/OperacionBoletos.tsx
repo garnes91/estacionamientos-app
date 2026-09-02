@@ -5,6 +5,17 @@ import { BoletoImprimible, DatosBoletoImprimible } from './BoletoImprimible'
 import { ReciboCobro, DatosReciboCobro } from './ReciboCobro'
 import { ConfirmModal } from './ConfirmModal'
 
+/**
+ * Los errores que cruzan IPC llegan envueltos por Electron como
+ * `Error invoking remote method '...': Error: <mensaje real>` — se muestra
+ * solo la parte que le sirve al operador en caja, no el envoltorio técnico.
+ */
+function limpiarError(e: unknown): string {
+  const texto = e instanceof Error ? e.message : String(e)
+  const match = texto.match(/Error invoking remote method '[^']*':\s*Error:\s*(.+)$/s)
+  return match ? match[1] : texto
+}
+
 interface TipoVehiculo {
   id: number
   nombre: string
@@ -100,7 +111,7 @@ export function OperacionBoletos({
       setResumen(await window.api.resumen(estacionamiento.id))
       setSoloSerieA(await window.api.modoSoloSerieA.estado(estacionamiento.id))
     }
-    cargarInicial().catch((e) => setError(String(e)))
+    cargarInicial().catch((e) => setError(limpiarError(e)))
     placaRef.current?.focus()
   }, [])
 
@@ -136,7 +147,7 @@ export function OperacionBoletos({
       placaRef.current?.focus()
       await refrescarResumen(estacionamientoId)
     } catch (e) {
-      setError(String(e))
+      setError(limpiarError(e))
     } finally {
       setCargando(false)
     }
@@ -172,7 +183,7 @@ export function OperacionBoletos({
     try {
       setSoloSerieA(await window.api.modoSoloSerieA.alternar(estacionamientoId))
     } catch (e) {
-      setError(String(e))
+      setError(limpiarError(e))
     } finally {
       setCambiandoSoloSerieA(false)
     }
@@ -214,7 +225,7 @@ export function OperacionBoletos({
       if (deEscaneoGlobal) setPlaca('')
       await refrescarResumen(estacionamientoId)
     } catch (e) {
-      setError(String(e))
+      setError(limpiarError(e))
     } finally {
       setCobrandoEscaneo(false)
     }
@@ -226,7 +237,7 @@ export function OperacionBoletos({
     try {
       await window.api.imprimir({ html: elemento.outerHTML, tipo: 'ticket' })
     } catch (e) {
-      setError(String(e))
+      setError(limpiarError(e))
     }
   }
 
@@ -313,7 +324,7 @@ export function OperacionBoletos({
     try {
       await window.api.imprimir({ html: elemento.outerHTML, tipo: 'ticket' })
     } catch (e) {
-      setError(String(e))
+      setError(limpiarError(e))
     }
   }
 

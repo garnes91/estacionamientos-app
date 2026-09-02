@@ -175,6 +175,24 @@ CREATE INDEX IF NOT EXISTS idx_boletos_hora_salida
   ON boletos (estacionamiento_id, hora_salida);
 
 -- ============================================================
+-- Intentos de recobro — alguien vuelve a escanear un boleto que ya no
+-- está abierto (ver cobrarBoletoPorFolio en src/db/boletos.ts). Puede ser
+-- un doble escaneo honesto, o un boleto reciclado a propósito para
+-- cobrarlo dos veces (el cliente ya se fue, alguien se queda con el
+-- segundo cobro en efectivo) — no se bloquea nada en el momento, solo se
+-- deja rastro de quién y cuándo para poder revisar el patrón después.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS intentos_recobro (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  boleto_id    INTEGER NOT NULL REFERENCES boletos(id),
+  usuario_id   INTEGER NOT NULL REFERENCES usuarios(id),
+  intentado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_intentos_recobro_boleto ON intentos_recobro (boleto_id);
+CREATE INDEX IF NOT EXISTS idx_intentos_recobro_usuario ON intentos_recobro (usuario_id);
+
+-- ============================================================
 -- Cortes de caja — cierre de un periodo (turno o día). No guarda una copia
 -- de los boletos: el rango (desde, hasta] sobre boletos.hora_salida se usa
 -- para reconstruir el detalle cuando se necesite (ver obtenerDetalleCorte).

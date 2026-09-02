@@ -245,10 +245,38 @@ describe('cobrarBoletoPorFolio', () => {
     expect(cierre.monto).toBe(40)
   })
 
-  it('lanza error si no hay boleto abierto con ese folio', () => {
+  it('lanza error si el folio nunca existió', () => {
     expect(() =>
       cobrarBoletoPorFolio(db, { estacionamientoId, serie: 'Z', folio: 999, usuarioCobroId: usuarioId })
-    ).toThrow('No hay un boleto abierto con folio Z-999')
+    ).toThrow('No existe ningún boleto con folio Z-999')
+  })
+
+  it('lanza un error distinto si el boleto ya fue cobrado, y deja registro en intentos_recobro', () => {
+    const emitido = emitirBoleto(db, { estacionamientoId, tipoVehiculoId: tipoAutoId, usuarioEmisionId: usuarioId })
+    cobrarBoletoPorFolio(db, { estacionamientoId, serie: emitido.serie, folio: emitido.folio, usuarioCobroId: usuarioId })
+
+    expect(() =>
+      cobrarBoletoPorFolio(db, { estacionamientoId, serie: emitido.serie, folio: emitido.folio, usuarioCobroId: usuarioId })
+    ).toThrow('ya fue cobrado antes')
+
+    const { n } = db.prepare('SELECT COUNT(*) AS n FROM intentos_recobro WHERE boleto_id = ?').get(emitido.id) as {
+      n: number
+    }
+    expect(n).toBe(1)
+  })
+
+  it('lanza un error distinto si el boleto está cancelado (sin registrar intento de recobro)', () => {
+    const emitido = emitirBoleto(db, { estacionamientoId, tipoVehiculoId: tipoAutoId, usuarioEmisionId: usuarioId })
+    db.prepare("UPDATE boletos SET estado = 'cancelado' WHERE id = ?").run(emitido.id)
+
+    expect(() =>
+      cobrarBoletoPorFolio(db, { estacionamientoId, serie: emitido.serie, folio: emitido.folio, usuarioCobroId: usuarioId })
+    ).toThrow('está cancelado')
+
+    const { n } = db.prepare('SELECT COUNT(*) AS n FROM intentos_recobro WHERE boleto_id = ?').get(emitido.id) as {
+      n: number
+    }
+    expect(n).toBe(0)
   })
 })
 

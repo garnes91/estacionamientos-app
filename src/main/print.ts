@@ -5,23 +5,12 @@ import { obtenerConfiguracionImpresion } from '../db/configuracionImpresion'
 
 export type TipoImpresion = 'ticket' | 'reporte'
 
+// Ancho cómodo para el contenido de 76mm de los tickets (ver BoletoImprimible.tsx
+// / ReciboCobro.tsx) sin que nada se recorte por la izquierda/derecha al capturar.
+const ANCHO_VENTANA_TICKET = 320
+
 function construirDocumento(html: string, tipo: TipoImpresion): string {
   const pagina = tipo === 'ticket' ? '@page { size: 80mm auto; margin: 0; }' : '@page { margin: 1cm; }'
-  // El código de barras (SVG) y el esquema del coche (JPG ya binarizado a
-  // blanco/negro puro) salen bien en una térmica; el texto plano no —
-  // llega antialiaseado (bordes en gris), y muchas térmicas/sus drivers
-  // descartan agresivamente esos grises claros al convertir a blanco/negro
-  // puro. Negritas + negro forzado + sin suavizado le dan al texto trazos
-  // sólidos que sobreviven ese umbral igual que ya sobrevive el barcode.
-  const textoParaTermica =
-    tipo === 'ticket'
-      ? `body, body * {
-           color: #000 !important;
-           font-weight: 700 !important;
-           -webkit-font-smoothing: none !important;
-           text-rendering: optimizeSpeed !important;
-         }`
-      : ''
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -29,7 +18,6 @@ function construirDocumento(html: string, tipo: TipoImpresion): string {
 <style>
   ${pagina}
   body { margin: 0; padding: 4px; font-family: sans-serif; }
-  ${textoParaTermica}
 </style>
 </head>
 <body>${html}</body>
@@ -38,10 +26,48 @@ function construirDocumento(html: string, tipo: TipoImpresion): string {
 
 /** Abre una ventana oculta con solo este HTML — sin nada más de la app — y la entrega ya cargada. */
 async function abrirVentanaConHtml(html: string, tipo: TipoImpresion): Promise<BrowserWindow> {
-  const ventana = new BrowserWindow({ show: false })
+  const ventana = new BrowserWindow({ show: false, width: tipo === 'ticket' ? ANCHO_VENTANA_TICKET : undefined })
   const documento = construirDocumento(html, tipo)
   await ventana.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(documento)}`)
   return ventana
+}
+
+/**
+ * Algunas impresoras térmicas (o su driver/filtro de impresión) imprimen
+ * bien imágenes y gráficos vectoriales (el código de barras, el esquema
+ * del coche) pero pierden el texto real — probado en la práctica: con CSS
+ * (negritas/negro/sin antialiasing) el texto seguía sin salir. En vez de
+ * seguir adivinando por qué el texto falla, se evita el problema de raíz:
+ * se captura el ticket YA renderizado (texto incluido) como una sola
+ * imagen, y se manda a imprimir esa imagen — nada de texto real llega a la
+ * impresora, todo es una imagen, igual que ya funciona el barcode/esquema.
+ * Cierra `ventanaOriginal` y devuelve una ventana nueva lista para imprimir.
+ */
+async function convertirEnImagenParaImprimir(ventanaOriginal: BrowserWindow): Promise<BrowserWindow> {
+  const alto: number = await ventanaOriginal.webContents.executeJavaScript('document.body.scrollHeight')
+  ventanaOriginal.setContentSize(ANCHO_VENTANA_TICKET, Math.max(1, Math.ceil(alto)))
+  // Le da un instante al compositor de repintar ya con el tamaño nuevo antes de capturar.
+  await new Promise((resolve) => setTimeout(resolve, 50))
+
+  const captura = await ventanaOriginal.webContents.capturePage()
+  ventanaOriginal.close()
+
+  const documentoImagen = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<style>
+  @page { size: 80mm auto; margin: 0; }
+  body { margin: 0; }
+  img { display: block; width: 100%; }
+</style>
+</head>
+<body><img src="${captura.toDataURL()}" /></body>
+</html>`
+
+  const ventanaImagen = new BrowserWindow({ show: false })
+  await ventanaImagen.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(documentoImagen)}`)
+  return ventanaImagen
 }
 
 /**
@@ -49,8 +75,9 @@ async function abrirVentanaConHtml(html: string, tipo: TipoImpresion): Promise<B
  * ventana oculta dedicada que no contiene nada más de la app. Evita
  * depender de aislar con CSS (@media print + visibility) la ventana
  * principal, que resultó frágil. `tipo` ajusta el tamaño de página: 'ticket'
- * para el ancho de rollo térmico (80mm), 'reporte' para hoja normal
- * (cortes de caja).
+ * para el ancho de rollo térmico (80mm, además convertido a imagen antes de
+ * imprimir — ver convertirEnImagenParaImprimir), 'reporte' para hoja normal
+ * (cortes de caja, sin cambios).
  *
  * Si en Configuración se fijó una impresora para este tipo (ver
  * src/db/configuracionImpresion.ts), se imprime directo ahí sin preguntar
@@ -59,7 +86,10 @@ async function abrirVentanaConHtml(html: string, tipo: TipoImpresion): Promise<B
  */
 export function registrarImpresion(): void {
   ipcMain.handle('impresion:imprimir', async (_evento, params: { html: string; tipo: TipoImpresion }) => {
-    const ventana = await abrirVentanaConHtml(params.html, params.tipo)
+    let ventana = await abrirVentanaConHtml(params.html, params.tipo)
+    if (params.tipo === 'ticket') {
+      ventana = await convertirEnImagenParaImprimir(ventana)
+    }
     try {
       const estacionamiento = obtenerEstacionamientoActual(obtenerDb())
       const config = obtenerConfiguracionImpresion(obtenerDb(), estacionamiento.id)

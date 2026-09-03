@@ -52,14 +52,20 @@ async function convertirEnImagenParaImprimir(ventanaOriginal: BrowserWindow): Pr
   const captura = await ventanaOriginal.webContents.capturePage()
   ventanaOriginal.close()
 
+  // Ancho fijo en milímetros (no "100%") a propósito: en pantallas Retina la
+  // captura sale al doble de píxeles reales, y un "100%" no tenía contra qué
+  // ancho concreto escalar en este documento nuevo — terminaba imprimiéndose
+  // a su tamaño real en píxeles (con zoom, recortado) en vez de ajustarse al
+  // rollo. Fijar "80mm" explícito no deja ambigüedad, sin importar cuántos
+  // píxeles reales tenga la imagen capturada.
   const documentoImagen = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8" />
 <style>
   @page { size: 80mm auto; margin: 0; }
-  body { margin: 0; }
-  img { display: block; width: 100%; }
+  html, body { margin: 0; padding: 0; width: 80mm; }
+  img { display: block; width: 80mm; height: auto; }
 </style>
 </head>
 <body><img src="${captura.toDataURL()}" /></body>

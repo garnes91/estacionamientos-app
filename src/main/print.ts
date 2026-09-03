@@ -1,6 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
-import { writeFile } from 'fs/promises'
-import { join } from 'path'
+import { BrowserWindow, ipcMain } from 'electron'
 import { obtenerDb } from './db'
 import { obtenerEstacionamientoActual } from '../db/estacionamientos'
 import { obtenerConfiguracionImpresion } from '../db/configuracionImpresion'
@@ -74,17 +72,15 @@ async function convertirEnImagenParaImprimir(ventanaOriginal: BrowserWindow): Pr
   })
   ventanaOriginal.close()
 
-  // TEMPORAL — diagnóstico: guarda la imagen capturada tal cual, antes de
-  // mandarla a imprimir, para poder abrirla directo (Escritorio) y ver si
-  // YA sale recortada ahí (bug al capturar) o si sale completa y se
-  // recorta después, al imprimir (bug en la impresión). Quitar una vez
-  // resuelto.
-  try {
-    await writeFile(join(app.getPath('desktop'), 'ultimo-ticket-capturado.png'), captura.toPNG())
-  } catch (error) {
-    console.error('[impresion] no se pudo guardar la captura de diagnóstico:', error)
-  }
-
+  // La imagen capturada en sí ya sale completa (confirmado guardándola a
+  // disco y abriéndola directo) — lo que se recortaba era la IMPRESIÓN:
+  // con "80mm auto" de alto, el driver de esta térmica no maneja bien
+  // páginas altas (tickets con texto largo) y las recorta en vez de
+  // ajustarlas. Se le da un alto EXACTO en mm en vez de "auto", calculado
+  // del alto real de la captura (1px CSS = 25.4/96 mm, sin importar
+  // cuántos píxeles físicos tenga la imagen en una pantalla Retina) — así
+  // no queda nada "automático" que el driver pueda interpretar mal.
+  const altoMm = (altoFinal * 25.4) / 96
   // Ancho fijo en milímetros (no "100%") a propósito: en pantallas Retina la
   // captura sale al doble de píxeles reales, y un "100%" no tenía contra qué
   // ancho concreto escalar en este documento nuevo — terminaba imprimiéndose
@@ -96,7 +92,7 @@ async function convertirEnImagenParaImprimir(ventanaOriginal: BrowserWindow): Pr
 <head>
 <meta charset="UTF-8" />
 <style>
-  @page { size: 80mm auto; margin: 0; }
+  @page { size: 80mm ${altoMm.toFixed(2)}mm; margin: 0; }
   html, body { margin: 0; padding: 0; width: 80mm; }
   img { display: block; width: 80mm; height: auto; }
 </style>

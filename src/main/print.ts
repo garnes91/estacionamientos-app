@@ -7,6 +7,21 @@ export type TipoImpresion = 'ticket' | 'reporte'
 
 function construirDocumento(html: string, tipo: TipoImpresion): string {
   const pagina = tipo === 'ticket' ? '@page { size: 80mm auto; margin: 0; }' : '@page { margin: 1cm; }'
+  // El código de barras (SVG) y el esquema del coche (JPG ya binarizado a
+  // blanco/negro puro) salen bien en una térmica; el texto plano no —
+  // llega antialiaseado (bordes en gris), y muchas térmicas/sus drivers
+  // descartan agresivamente esos grises claros al convertir a blanco/negro
+  // puro. Negritas + negro forzado + sin suavizado le dan al texto trazos
+  // sólidos que sobreviven ese umbral igual que ya sobrevive el barcode.
+  const textoParaTermica =
+    tipo === 'ticket'
+      ? `body, body * {
+           color: #000 !important;
+           font-weight: 700 !important;
+           -webkit-font-smoothing: none !important;
+           text-rendering: optimizeSpeed !important;
+         }`
+      : ''
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -14,6 +29,7 @@ function construirDocumento(html: string, tipo: TipoImpresion): string {
 <style>
   ${pagina}
   body { margin: 0; padding: 4px; font-family: sans-serif; }
+  ${textoParaTermica}
 </style>
 </head>
 <body>${html}</body>

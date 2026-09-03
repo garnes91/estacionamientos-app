@@ -9,6 +9,15 @@ export type TipoImpresion = 'ticket' | 'reporte'
 // / ReciboCobro.tsx) sin que nada se recorte por la izquierda/derecha al capturar.
 const ANCHO_VENTANA_TICKET = 320
 
+// Alto máximo (en px CSS) de cada "página" impresa de un ticket — corto a
+// propósito: la impresora térmica del usuario recorta/deforma páginas altas
+// (probado con "auto" y con un alto exacto grande, ambos fallaron distinto),
+// pero SÍ imprime bien páginas cortas (así salió el código de barras + el
+// esquema del coche originalmente). Un ticket con texto largo se divide en
+// varias impresiones cortas seguidas en vez de pedirle a la impresora una
+// sola página alta.
+const ALTO_MAX_POR_PAGINA = 500
+
 function construirDocumento(html: string, tipo: TipoImpresion): string {
   const pagina = tipo === 'ticket' ? '@page { size: 80mm auto; margin: 0; }' : '@page { margin: 1cm; }'
   return `<!DOCTYPE html>
@@ -32,87 +41,96 @@ async function abrirVentanaConHtml(html: string, tipo: TipoImpresion): Promise<B
   return ventana
 }
 
+/** Imprime una única imagen ya recortada como una página corta de 80mm de ancho, alto automático. */
+async function imprimirImagenComoPagina(
+  imagen: Electron.NativeImage,
+  deviceName: string | null | undefined
+): Promise<void> {
+  const documentoImagen = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<style>
+  @page { size: 80mm auto; margin: 0; }
+  html, body { margin: 0; padding: 0; width: 80mm; }
+  img { display: block; width: 80mm; height: auto; }
+</style>
+</head>
+<body><img src="${imagen.toDataURL()}" /></body>
+</html>`
+
+  const ventana = new BrowserWindow({ show: false })
+  try {
+    await ventana.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(documentoImagen)}`)
+    await new Promise<void>((resolve, reject) => {
+      const opciones: Electron.WebContentsPrintOptions = deviceName
+        ? { silent: true, printBackground: true, deviceName }
+        : { silent: false, printBackground: true }
+      ventana.webContents.print(opciones, (success, failureReason) => {
+        if (!success && failureReason !== 'cancelled') {
+          reject(new Error(failureReason))
+          return
+        }
+        resolve()
+      })
+    })
+  } finally {
+    if (!ventana.isDestroyed()) ventana.close()
+  }
+}
+
 /**
  * Algunas impresoras térmicas (o su driver/filtro de impresión) imprimen
- * bien imágenes y gráficos vectoriales (el código de barras, el esquema
- * del coche) pero pierden el texto real — probado en la práctica: con CSS
- * (negritas/negro/sin antialiasing) el texto seguía sin salir. En vez de
- * seguir adivinando por qué el texto falla, se evita el problema de raíz:
- * se captura el ticket YA renderizado (texto incluido) como una sola
- * imagen, y se manda a imprimir esa imagen — nada de texto real llega a la
- * impresora, todo es una imagen, igual que ya funciona el barcode/esquema.
- * Cierra `ventanaOriginal` y devuelve una ventana nueva lista para imprimir.
+ * bien imágenes y gráficos vectoriales (el código de barras, el esquema del
+ * coche) pero pierden el texto real — probado en la práctica: con CSS
+ * (negritas/negro/sin antialiasing) el texto seguía sin salir. Se evita el
+ * problema de raíz: se captura el ticket YA renderizado (texto incluido)
+ * como imagen — nada de texto real llega a la impresora — y, para no
+ * toparse con el otro problema (páginas altas recortadas/deformadas), se
+ * captura y manda a imprimir en varias tandas cortas de a lo más
+ * ALTO_MAX_POR_PAGINA px CSS cada una, seguidas, en vez de una sola página
+ * alta con todo el ticket.
  */
-async function convertirEnImagenParaImprimir(ventanaOriginal: BrowserWindow): Promise<BrowserWindow> {
-  const alto: number = await ventanaOriginal.webContents.executeJavaScript('document.body.scrollHeight')
-  const altoFinal = Math.max(1, Math.ceil(alto))
-  ventanaOriginal.setContentSize(ANCHO_VENTANA_TICKET, altoFinal)
+async function imprimirTicketComoImagen(html: string, deviceName: string | null | undefined): Promise<void> {
+  const ventana = await abrirVentanaConHtml(html, 'ticket')
 
-  // window.scrollTo(0,0): tras agrandar la ventana no había garantía de que
-  // el scroll quedara en el origen — se confirmó con una foto real que lo
-  // que fallaba no era el texto en sí (el texto SÍ imprime bien, ej.
-  // "Marcar daños visibles al ingresar:") sino que la captura salía
-  // recortada por arriba (justo donde está el nombre/folio/vehículo/
-  // entrada), con el punto de corte variando entre una impresión y otra.
-  await ventanaOriginal.webContents.executeJavaScript(`
+  const alto: number = await ventana.webContents.executeJavaScript('document.body.scrollHeight')
+  const altoFinal = Math.max(1, Math.ceil(alto))
+  ventana.setContentSize(ANCHO_VENTANA_TICKET, altoFinal)
+
+  // window.scrollTo(0,0) + esperar fuentes/frames: tras agrandar la ventana
+  // no había garantía de que el scroll quedara en el origen, y el texto
+  // podía tardar un poco más que el SVG/imagen en pintarse en una ventana
+  // oculta — sin esto, la captura salía recortada o incompleta.
+  await ventana.webContents.executeJavaScript(`
     window.scrollTo(0, 0);
     document.fonts.ready
       .then(() => new Promise(requestAnimationFrame))
       .then(() => new Promise(requestAnimationFrame))
   `)
 
-  // Se especifica la región exacta a capturar (desde 0,0) en vez de confiar
-  // en el scroll/viewport que le haya quedado a la ventana — así no importa
-  // si algo lo mueve, siempre se agarra el ticket completo desde el inicio.
-  const captura = await ventanaOriginal.webContents.capturePage({
-    x: 0,
-    y: 0,
-    width: ANCHO_VENTANA_TICKET,
-    height: altoFinal
-  })
-  ventanaOriginal.close()
+  const partes: Electron.NativeImage[] = []
+  for (let y = 0; y < altoFinal; y += ALTO_MAX_POR_PAGINA) {
+    const altoParte = Math.min(ALTO_MAX_POR_PAGINA, altoFinal - y)
+    partes.push(await ventana.webContents.capturePage({ x: 0, y, width: ANCHO_VENTANA_TICKET, height: altoParte }))
+  }
+  ventana.close()
 
-  // La imagen capturada en sí ya sale completa (confirmado guardándola a
-  // disco y abriéndola directo) — lo que se recortaba era la IMPRESIÓN:
-  // con "80mm auto" de alto, el driver de esta térmica no maneja bien
-  // páginas altas (tickets con texto largo) y las recorta en vez de
-  // ajustarlas. Se le da un alto EXACTO en mm en vez de "auto", calculado
-  // del alto real de la captura (1px CSS = 25.4/96 mm, sin importar
-  // cuántos píxeles físicos tenga la imagen en una pantalla Retina) — así
-  // no queda nada "automático" que el driver pueda interpretar mal.
-  const altoMm = (altoFinal * 25.4) / 96
-  // Ancho fijo en milímetros (no "100%") a propósito: en pantallas Retina la
-  // captura sale al doble de píxeles reales, y un "100%" no tenía contra qué
-  // ancho concreto escalar en este documento nuevo — terminaba imprimiéndose
-  // a su tamaño real en píxeles (con zoom, recortado) en vez de ajustarse al
-  // rollo. Fijar "80mm" explícito no deja ambigüedad, sin importar cuántos
-  // píxeles reales tenga la imagen capturada.
-  const documentoImagen = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8" />
-<style>
-  @page { size: 80mm ${altoMm.toFixed(2)}mm; margin: 0; }
-  html, body { margin: 0; padding: 0; width: 80mm; }
-  img { display: block; width: 80mm; height: auto; }
-</style>
-</head>
-<body><img src="${captura.toDataURL()}" /></body>
-</html>`
-
-  const ventanaImagen = new BrowserWindow({ show: false })
-  await ventanaImagen.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(documentoImagen)}`)
-  return ventanaImagen
+  // Una tanda a la vez (no en paralelo) para no mezclar los trabajos en la
+  // cola de impresión — en un rollo continuo, varias impresiones cortas
+  // seguidas se ven como un solo ticket largo.
+  for (const parte of partes) {
+    await imprimirImagenComoPagina(parte, deviceName)
+  }
 }
 
 /**
- * Imprime HTML ya renderizado (outerHTML de un elemento del renderer) en una
- * ventana oculta dedicada que no contiene nada más de la app. Evita
- * depender de aislar con CSS (@media print + visibility) la ventana
- * principal, que resultó frágil. `tipo` ajusta el tamaño de página: 'ticket'
- * para el ancho de rollo térmico (80mm, además convertido a imagen antes de
- * imprimir — ver convertirEnImagenParaImprimir), 'reporte' para hoja normal
- * (cortes de caja, sin cambios).
+ * Imprime HTML ya renderizado (outerHTML de un elemento del renderer). `tipo`
+ * decide el camino: 'ticket' se captura e imprime como imagen (ver
+ * imprimirTicketComoImagen), 'reporte' sigue el camino normal (documento
+ * HTML con texto real, en una ventana oculta dedicada — evita depender de
+ * aislar con CSS @media print + visibility la ventana principal, que
+ * resultó frágil).
  *
  * Si en Configuración se fijó una impresora para este tipo (ver
  * src/db/configuracionImpresion.ts), se imprime directo ahí sin preguntar
@@ -121,15 +139,17 @@ async function convertirEnImagenParaImprimir(ventanaOriginal: BrowserWindow): Pr
  */
 export function registrarImpresion(): void {
   ipcMain.handle('impresion:imprimir', async (_evento, params: { html: string; tipo: TipoImpresion }) => {
-    let ventana = await abrirVentanaConHtml(params.html, params.tipo)
-    if (params.tipo === 'ticket') {
-      ventana = await convertirEnImagenParaImprimir(ventana)
-    }
-    try {
-      const estacionamiento = obtenerEstacionamientoActual(obtenerDb())
-      const config = obtenerConfiguracionImpresion(obtenerDb(), estacionamiento.id)
-      const deviceName = params.tipo === 'ticket' ? config?.impresoraTicket : config?.impresoraReporte
+    const estacionamiento = obtenerEstacionamientoActual(obtenerDb())
+    const config = obtenerConfiguracionImpresion(obtenerDb(), estacionamiento.id)
+    const deviceName = params.tipo === 'ticket' ? config?.impresoraTicket : config?.impresoraReporte
 
+    if (params.tipo === 'ticket') {
+      await imprimirTicketComoImagen(params.html, deviceName)
+      return
+    }
+
+    const ventana = await abrirVentanaConHtml(params.html, params.tipo)
+    try {
       await new Promise<void>((resolve, reject) => {
         const opciones: Electron.WebContentsPrintOptions = deviceName
           ? { silent: true, printBackground: true, deviceName }

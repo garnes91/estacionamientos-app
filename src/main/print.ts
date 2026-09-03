@@ -1,4 +1,6 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
+import { writeFile } from 'fs/promises'
+import { join } from 'path'
 import { obtenerDb } from './db'
 import { obtenerEstacionamientoActual } from '../db/estacionamientos'
 import { obtenerConfiguracionImpresion } from '../db/configuracionImpresion'
@@ -71,6 +73,17 @@ async function convertirEnImagenParaImprimir(ventanaOriginal: BrowserWindow): Pr
     height: altoFinal
   })
   ventanaOriginal.close()
+
+  // TEMPORAL — diagnóstico: guarda la imagen capturada tal cual, antes de
+  // mandarla a imprimir, para poder abrirla directo (Escritorio) y ver si
+  // YA sale recortada ahí (bug al capturar) o si sale completa y se
+  // recorta después, al imprimir (bug en la impresión). Quitar una vez
+  // resuelto.
+  try {
+    await writeFile(join(app.getPath('desktop'), 'ultimo-ticket-capturado.png'), captura.toPNG())
+  } catch (error) {
+    console.error('[impresion] no se pudo guardar la captura de diagnóstico:', error)
+  }
 
   // Ancho fijo en milímetros (no "100%") a propósito: en pantallas Retina la
   // captura sale al doble de píxeles reales, y un "100%" no tenía contra qué

@@ -45,20 +45,31 @@ async function abrirVentanaConHtml(html: string, tipo: TipoImpresion): Promise<B
  */
 async function convertirEnImagenParaImprimir(ventanaOriginal: BrowserWindow): Promise<BrowserWindow> {
   const alto: number = await ventanaOriginal.webContents.executeJavaScript('document.body.scrollHeight')
-  ventanaOriginal.setContentSize(ANCHO_VENTANA_TICKET, Math.max(1, Math.ceil(alto)))
+  const altoFinal = Math.max(1, Math.ceil(alto))
+  ventanaOriginal.setContentSize(ANCHO_VENTANA_TICKET, altoFinal)
 
-  // Espera real a que termine de pintarse (no un tiempo fijo adivinado): a
-  // que las fuentes estén listas (document.fonts.ready) y a que pasen un
-  // par de frames de animación después del resize — el texto tardaba más
-  // en pintarse que el SVG/imagen en una ventana oculta, y una espera fija
-  // de 50ms no alcanzaba (salía el ticket sin texto).
+  // window.scrollTo(0,0): tras agrandar la ventana no había garantía de que
+  // el scroll quedara en el origen — se confirmó con una foto real que lo
+  // que fallaba no era el texto en sí (el texto SÍ imprime bien, ej.
+  // "Marcar daños visibles al ingresar:") sino que la captura salía
+  // recortada por arriba (justo donde está el nombre/folio/vehículo/
+  // entrada), con el punto de corte variando entre una impresión y otra.
   await ventanaOriginal.webContents.executeJavaScript(`
+    window.scrollTo(0, 0);
     document.fonts.ready
       .then(() => new Promise(requestAnimationFrame))
       .then(() => new Promise(requestAnimationFrame))
   `)
 
-  const captura = await ventanaOriginal.webContents.capturePage()
+  // Se especifica la región exacta a capturar (desde 0,0) en vez de confiar
+  // en el scroll/viewport que le haya quedado a la ventana — así no importa
+  // si algo lo mueve, siempre se agarra el ticket completo desde el inicio.
+  const captura = await ventanaOriginal.webContents.capturePage({
+    x: 0,
+    y: 0,
+    width: ANCHO_VENTANA_TICKET,
+    height: altoFinal
+  })
   ventanaOriginal.close()
 
   // Ancho fijo en milímetros (no "100%") a propósito: en pantallas Retina la

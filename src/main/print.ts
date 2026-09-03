@@ -46,8 +46,17 @@ async function abrirVentanaConHtml(html: string, tipo: TipoImpresion): Promise<B
 async function convertirEnImagenParaImprimir(ventanaOriginal: BrowserWindow): Promise<BrowserWindow> {
   const alto: number = await ventanaOriginal.webContents.executeJavaScript('document.body.scrollHeight')
   ventanaOriginal.setContentSize(ANCHO_VENTANA_TICKET, Math.max(1, Math.ceil(alto)))
-  // Le da un instante al compositor de repintar ya con el tamaño nuevo antes de capturar.
-  await new Promise((resolve) => setTimeout(resolve, 50))
+
+  // Espera real a que termine de pintarse (no un tiempo fijo adivinado): a
+  // que las fuentes estén listas (document.fonts.ready) y a que pasen un
+  // par de frames de animación después del resize — el texto tardaba más
+  // en pintarse que el SVG/imagen en una ventana oculta, y una espera fija
+  // de 50ms no alcanzaba (salía el ticket sin texto).
+  await ventanaOriginal.webContents.executeJavaScript(`
+    document.fonts.ready
+      .then(() => new Promise(requestAnimationFrame))
+      .then(() => new Promise(requestAnimationFrame))
+  `)
 
   const captura = await ventanaOriginal.webContents.capturePage()
   ventanaOriginal.close()

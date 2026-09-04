@@ -45,9 +45,13 @@ export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactEl
 
   async function imprimirRecibo(): Promise<void> {
     const elemento = document.getElementById('recibo-cobro')
-    if (!elemento) return
+    if (!elemento || !ultimoCobro) return
     try {
-      await window.api.imprimir({ html: elemento.outerHTML, tipo: 'ticket' })
+      await window.api.imprimir({
+        html: elemento.outerHTML,
+        tipo: 'ticket',
+        datosTicket: { variante: 'cobro', claveFolio, datos: ultimoCobro }
+      })
     } catch (e) {
       setError(String(e))
     }

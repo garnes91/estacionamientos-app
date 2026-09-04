@@ -92,8 +92,8 @@ export function Pensionados({ onVolver }: { onVolver: () => void }): ReactElemen
     const elemento = document.getElementById('pensionado-ticket')
     if (!elemento) return
     try {
-      await window.api.imprimir({ html: elemento.outerHTML, tipo: 'ticket' })
-      await window.api.imprimir({ html: elemento.outerHTML, tipo: 'ticket' })
+      await window.api.imprimir({ html: elemento.outerHTML, tipo: 'ticket', datosTicket: { variante: 'pensionado', datos } })
+      await window.api.imprimir({ html: elemento.outerHTML, tipo: 'ticket', datosTicket: { variante: 'pensionado', datos } })
     } catch (e) {
       setError(String(e))
     }
@@ -101,9 +101,13 @@ export function Pensionados({ onVolver }: { onVolver: () => void }): ReactElemen
 
   async function reimprimir(): Promise<void> {
     const elemento = document.getElementById('pensionado-ticket')
-    if (!elemento) return
+    if (!elemento || !ultimoTicket) return
     try {
-      await window.api.imprimir({ html: elemento.outerHTML, tipo: 'ticket' })
+      await window.api.imprimir({
+        html: elemento.outerHTML,
+        tipo: 'ticket',
+        datosTicket: { variante: 'pensionado', datos: ultimoTicket }
+      })
     } catch (e) {
       setError(String(e))
     }

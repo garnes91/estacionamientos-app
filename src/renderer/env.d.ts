@@ -228,6 +228,15 @@ interface ConfiguracionMonitoreoApi {
 interface ConfiguracionImpresionApi {
   impresoraTicket: string | null
   impresoraReporte: string | null
+  ticketModoCrudo: boolean
+  ticketUsbVendorId: number | null
+  ticketUsbProductId: number | null
+}
+
+interface ImpresoraUsbApi {
+  vendorId: number
+  productId: number
+  nombre: string
 }
 
 interface ConfiguracionFacturacionApi {
@@ -267,7 +276,57 @@ declare global {
       verificarCredenciales: (params: { nombreUsuario: string; password: string }) => Promise<UsuarioApi>
       listarTiposVehiculo: (estacionamientoId: number) => Promise<TipoVehiculoApi[]>
       listarTarifasPlanas: (estacionamientoId: number) => Promise<TarifaPlanaAdminApi[]>
-      imprimir: (params: { html: string; tipo: 'ticket' | 'reporte' }) => Promise<void>
+      imprimir: (params: {
+        html: string
+        tipo: 'ticket' | 'reporte'
+        datosTicket?:
+          | {
+              variante: 'entrada'
+              claveFolio: string
+              datos: {
+                estacionamientoNombre: string
+                textoBoleto: string | null
+                serie: string
+                folio: number
+                tipoVehiculo: string
+                placa: string | null
+                horaEntrada: string
+                tarifaPlana?: { nombre: string; precioFijo: number; horasIncluidas: number } | null
+              }
+            }
+          | {
+              variante: 'cobro'
+              claveFolio: string
+              datos: {
+                estacionamientoNombre: string
+                textoBoleto: string | null
+                serie: string
+                folio: number
+                tipoCobro: 'regular' | 'plana'
+                minutosTotales: number
+                monto: number
+                excedenteMinutos?: number
+                excedenteMonto?: number
+                recargoBoletoPerdido?: number
+              }
+            }
+          | {
+              variante: 'pensionado'
+              datos: {
+                tipo: 'alta' | 'baja' | 'pago'
+                folio: number
+                estacionamientoNombre: string
+                nombre: string
+                placa: string | null
+                tipoVehiculo: string
+                fecha: string
+                cuotaMensual?: number
+                monto?: number
+                periodoDesde?: string
+                periodoHasta?: string
+              }
+            }
+      }) => Promise<void>
       emitirBoleto: (params: {
         estacionamientoId: number
         tipoVehiculoId: number
@@ -405,6 +464,7 @@ declare global {
           obtener: (estacionamientoId: number) => Promise<ConfiguracionImpresionApi | null>
           guardar: (params: { estacionamientoId: number; config: ConfiguracionImpresionApi }) => Promise<void>
           listarImpresoras: () => Promise<ImpresoraApi[]>
+          listarImpresorasUsb: () => Promise<ImpresoraUsbApi[]>
         }
         facturacion: {
           obtener: (estacionamientoId: number) => Promise<ConfiguracionFacturacionApi | null>

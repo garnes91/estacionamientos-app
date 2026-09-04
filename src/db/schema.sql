@@ -298,6 +298,12 @@ CREATE TABLE IF NOT EXISTS configuracion_impresion (
   estacionamiento_id  INTEGER NOT NULL REFERENCES estacionamientos(id),
   impresora_ticket    TEXT,
   impresora_reporte   TEXT,
+  -- Modo crudo (ESC/POS directo por USB, ver src/main/escpos.ts y
+  -- src/main/escposUsb.ts) — para impresoras térmicas cuyo driver gráfico
+  -- no se puede instalar en Windows. Opcional, apagado por default.
+  ticket_modo_crudo     INTEGER NOT NULL DEFAULT 0 CHECK (ticket_modo_crudo IN (0, 1)),
+  ticket_usb_vendor_id  INTEGER,
+  ticket_usb_product_id INTEGER,
   UNIQUE (estacionamiento_id)
 );
 

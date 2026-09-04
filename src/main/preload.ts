@@ -19,7 +19,60 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('auth:verificar', params),
   listarTiposVehiculo: (estacionamientoId: number) => ipcRenderer.invoke('tiposVehiculo:listar', estacionamientoId),
   listarTarifasPlanas: (estacionamientoId: number) => ipcRenderer.invoke('tarifasPlanas:listar', estacionamientoId),
-  imprimir: (params: { html: string; tipo: 'ticket' | 'reporte' }) => ipcRenderer.invoke('impresion:imprimir', params),
+  imprimir: (params: {
+    html: string
+    tipo: 'ticket' | 'reporte'
+    // Datos estructurados del ticket — solo se usan si la instalación
+    // tiene activado el modo crudo (ESC/POS por USB, ver
+    // src/main/escpos.ts); si no, se ignoran y se usa `html` como siempre.
+    datosTicket?:
+      | {
+          variante: 'entrada'
+          claveFolio: string
+          datos: {
+            estacionamientoNombre: string
+            textoBoleto: string | null
+            serie: string
+            folio: number
+            tipoVehiculo: string
+            placa: string | null
+            horaEntrada: string
+            tarifaPlana?: { nombre: string; precioFijo: number; horasIncluidas: number } | null
+          }
+        }
+      | {
+          variante: 'cobro'
+          claveFolio: string
+          datos: {
+            estacionamientoNombre: string
+            textoBoleto: string | null
+            serie: string
+            folio: number
+            tipoCobro: 'regular' | 'plana'
+            minutosTotales: number
+            monto: number
+            excedenteMinutos?: number
+            excedenteMonto?: number
+            recargoBoletoPerdido?: number
+          }
+        }
+      | {
+          variante: 'pensionado'
+          datos: {
+            tipo: 'alta' | 'baja' | 'pago'
+            folio: number
+            estacionamientoNombre: string
+            nombre: string
+            placa: string | null
+            tipoVehiculo: string
+            fecha: string
+            cuotaMensual?: number
+            monto?: number
+            periodoDesde?: string
+            periodoHasta?: string
+          }
+        }
+  }) => ipcRenderer.invoke('impresion:imprimir', params),
   emitirBoleto: (params: {
     estacionamientoId: number
     tipoVehiculoId: number
@@ -189,9 +242,16 @@ contextBridge.exposeInMainWorld('api', {
       obtener: (estacionamientoId: number) => ipcRenderer.invoke('admin:impresion:obtener', estacionamientoId),
       guardar: (params: {
         estacionamientoId: number
-        config: { impresoraTicket: string | null; impresoraReporte: string | null }
+        config: {
+          impresoraTicket: string | null
+          impresoraReporte: string | null
+          ticketModoCrudo: boolean
+          ticketUsbVendorId: number | null
+          ticketUsbProductId: number | null
+        }
       }) => ipcRenderer.invoke('admin:impresion:guardar', params),
-      listarImpresoras: () => ipcRenderer.invoke('admin:impresion:listarImpresoras')
+      listarImpresoras: () => ipcRenderer.invoke('admin:impresion:listarImpresoras'),
+      listarImpresorasUsb: () => ipcRenderer.invoke('admin:impresion:listarImpresorasUsb')
     },
     facturacion: {
       obtener: (estacionamientoId: number) => ipcRenderer.invoke('admin:facturacion:obtener', estacionamientoId),

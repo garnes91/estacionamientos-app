@@ -1241,13 +1241,23 @@ function TabMonitoreo({ estacionamientoId, avisar, avisarError }: TabProps): Rea
 interface ConfiguracionImpresion {
   impresoraTicket: string | null
   impresoraReporte: string | null
+  ticketModoCrudo: boolean
+  ticketUsbVendorId: number | null
+  ticketUsbProductId: number | null
 }
 
-const IMPRESION_VACIA: ConfiguracionImpresion = { impresoraTicket: null, impresoraReporte: null }
+const IMPRESION_VACIA: ConfiguracionImpresion = {
+  impresoraTicket: null,
+  impresoraReporte: null,
+  ticketModoCrudo: false,
+  ticketUsbVendorId: null,
+  ticketUsbProductId: null
+}
 
 function TabImpresion({ estacionamientoId, avisar, avisarError }: TabProps): ReactElement {
   const [config, setConfig] = useState<ConfiguracionImpresion>(IMPRESION_VACIA)
   const [impresoras, setImpresoras] = useState<{ nombre: string; nombreVisible: string }[]>([])
+  const [impresorasUsb, setImpresorasUsb] = useState<{ vendorId: number; productId: number; nombre: string }[]>([])
   const [guardando, setGuardando] = useState(false)
 
   useEffect(() => {
@@ -1255,6 +1265,7 @@ function TabImpresion({ estacionamientoId, avisar, avisarError }: TabProps): Rea
       if (c) setConfig(c)
     })
     window.api.admin.impresion.listarImpresoras().then(setImpresoras).catch(avisarError)
+    window.api.admin.impresion.listarImpresorasUsb().then(setImpresorasUsb).catch(avisarError)
   }, [estacionamientoId])
 
   async function guardar(): Promise<void> {
@@ -1313,6 +1324,52 @@ function TabImpresion({ estacionamientoId, avisar, avisarError }: TabProps): Rea
       {impresoras.length === 0 && (
         <p style={{ color: '#999', fontSize: '0.8rem', maxWidth: 480 }}>
           No se detectaron impresoras instaladas en esta computadora.
+        </p>
+      )}
+
+      <h3>Modo crudo (ESC/POS)</h3>
+      <p style={{ color: '#666', fontSize: '0.85rem' }}>
+        Para impresoras térmicas cuyo driver gráfico no se puede instalar en Windows (certificado no confiable, etc.)
+        — la app le habla directo al dispositivo USB en vez de usar el sistema de impresión de Windows. Requiere que
+        el dispositivo tenga instalado el driver genérico WinUSB (con Zadig, no el driver del fabricante). Solo
+        aplica a tickets, no a los reportes de corte.
+      </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+        <input
+          type="checkbox"
+          id="ticket-modo-crudo"
+          checked={config.ticketModoCrudo}
+          onChange={(e) => setConfig({ ...config, ticketModoCrudo: e.target.checked })}
+        />
+        <label htmlFor="ticket-modo-crudo" style={{ margin: 0 }}>
+          Imprimir tickets en modo crudo (ESC/POS)
+        </label>
+      </div>
+
+      {config.ticketModoCrudo && (
+        <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '0.5rem', alignItems: 'center', maxWidth: 480 }}>
+          <label>Impresora USB</label>
+          <select
+            style={inputStyle}
+            value={config.ticketUsbVendorId != null ? `${config.ticketUsbVendorId}:${config.ticketUsbProductId}` : ''}
+            onChange={(e) => {
+              const [vendorId, productId] = e.target.value ? e.target.value.split(':').map(Number) : [null, null]
+              setConfig({ ...config, ticketUsbVendorId: vendorId, ticketUsbProductId: productId })
+            }}
+          >
+            <option value="">(elegir)</option>
+            {impresorasUsb.map((i) => (
+              <option key={`${i.vendorId}:${i.productId}`} value={`${i.vendorId}:${i.productId}`}>
+                {i.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      {config.ticketModoCrudo && impresorasUsb.length === 0 && (
+        <p style={{ color: '#999', fontSize: '0.8rem', maxWidth: 480 }}>
+          No se detectó ningún dispositivo USB de tipo impresora — revisa que esté conectada y que tenga el driver
+          WinUSB instalado.
         </p>
       )}
 

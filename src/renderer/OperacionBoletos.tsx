@@ -233,9 +233,13 @@ export function OperacionBoletos({
 
   async function imprimirRecibo(): Promise<void> {
     const elemento = document.getElementById('recibo-cobro')
-    if (!elemento) return
+    if (!elemento || !ultimoCobro) return
     try {
-      await window.api.imprimir({ html: elemento.outerHTML, tipo: 'ticket' })
+      await window.api.imprimir({
+        html: elemento.outerHTML,
+        tipo: 'ticket',
+        datosTicket: { variante: 'cobro', claveFolio, datos: ultimoCobro }
+      })
     } catch (e) {
       setError(limpiarError(e))
     }
@@ -320,9 +324,13 @@ export function OperacionBoletos({
 
   async function imprimir(): Promise<void> {
     const elemento = document.getElementById('boleto-imprimible')
-    if (!elemento) return
+    if (!elemento || !ultimoEmitido) return
     try {
-      await window.api.imprimir({ html: elemento.outerHTML, tipo: 'ticket' })
+      await window.api.imprimir({
+        html: elemento.outerHTML,
+        tipo: 'ticket',
+        datosTicket: { variante: 'entrada', claveFolio, datos: ultimoEmitido }
+      })
     } catch (e) {
       setError(limpiarError(e))
     }

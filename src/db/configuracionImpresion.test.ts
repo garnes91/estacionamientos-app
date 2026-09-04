@@ -21,25 +21,64 @@ describe('obtenerConfiguracionImpresion', () => {
 
 describe('guardarConfiguracionImpresion', () => {
   it('guarda y se puede volver a leer tal cual', () => {
-    const config = { impresoraTicket: 'EPSON TM-T88', impresoraReporte: 'HP LaserJet' }
+    const config = {
+      impresoraTicket: 'EPSON TM-T88',
+      impresoraReporte: 'HP LaserJet',
+      ticketModoCrudo: false,
+      ticketUsbVendorId: null,
+      ticketUsbProductId: null
+    }
     guardarConfiguracionImpresion(db, estacionamientoId, config)
     expect(obtenerConfiguracionImpresion(db, estacionamientoId)).toEqual(config)
   })
 
   it('permite dejar una impresora sin configurar (null)', () => {
-    guardarConfiguracionImpresion(db, estacionamientoId, { impresoraTicket: 'EPSON TM-T88', impresoraReporte: null })
+    guardarConfiguracionImpresion(db, estacionamientoId, {
+      impresoraTicket: 'EPSON TM-T88',
+      impresoraReporte: null,
+      ticketModoCrudo: false,
+      ticketUsbVendorId: null,
+      ticketUsbProductId: null
+    })
     expect(obtenerConfiguracionImpresion(db, estacionamientoId)).toEqual({
       impresoraTicket: 'EPSON TM-T88',
-      impresoraReporte: null
+      impresoraReporte: null,
+      ticketModoCrudo: false,
+      ticketUsbVendorId: null,
+      ticketUsbProductId: null
     })
   })
 
   it('guardar de nuevo actualiza en vez de duplicar', () => {
-    guardarConfiguracionImpresion(db, estacionamientoId, { impresoraTicket: 'A', impresoraReporte: 'B' })
-    guardarConfiguracionImpresion(db, estacionamientoId, { impresoraTicket: 'C', impresoraReporte: 'B' })
+    guardarConfiguracionImpresion(db, estacionamientoId, {
+      impresoraTicket: 'A',
+      impresoraReporte: 'B',
+      ticketModoCrudo: false,
+      ticketUsbVendorId: null,
+      ticketUsbProductId: null
+    })
+    guardarConfiguracionImpresion(db, estacionamientoId, {
+      impresoraTicket: 'C',
+      impresoraReporte: 'B',
+      ticketModoCrudo: false,
+      ticketUsbVendorId: null,
+      ticketUsbProductId: null
+    })
 
     const { n } = db.prepare('SELECT COUNT(*) AS n FROM configuracion_impresion').get() as { n: number }
     expect(n).toBe(1)
     expect(obtenerConfiguracionImpresion(db, estacionamientoId)?.impresoraTicket).toBe('C')
+  })
+
+  it('guarda el modo crudo y el vendorId/productId del dispositivo USB', () => {
+    const config = {
+      impresoraTicket: null,
+      impresoraReporte: null,
+      ticketModoCrudo: true,
+      ticketUsbVendorId: 0x04b8,
+      ticketUsbProductId: 0x0202
+    }
+    guardarConfiguracionImpresion(db, estacionamientoId, config)
+    expect(obtenerConfiguracionImpresion(db, estacionamientoId)).toEqual(config)
   })
 })

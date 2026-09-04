@@ -34,6 +34,7 @@ import {
   guardarConfiguracionFacturacion,
   obtenerConfiguracionFacturacion
 } from '../db/configuracionFacturacion'
+import { listarImpresorasUsb } from './escposUsb'
 
 /** Canales IPC exclusivos de la pantalla de configuración: todos exigen sesión de admin. */
 export function registrarIpcAdmin(): void {
@@ -282,5 +283,13 @@ export function registrarIpcAdmin(): void {
     } finally {
       if (!ventana.isDestroyed()) ventana.close()
     }
+  })
+
+  // Lista los dispositivos USB clase "impresora" conectados — para el modo
+  // crudo (ESC/POS, ver src/main/escposUsb.ts), que no usa colas de
+  // impresión de Windows sino que le habla directo al dispositivo.
+  ipcMain.handle('admin:impresion:listarImpresorasUsb', () => {
+    requerirAdmin()
+    return listarImpresorasUsb()
   })
 }

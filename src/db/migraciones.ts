@@ -19,6 +19,14 @@ export function migrarColumnasFaltantes(db: DB): void {
   agregarColumnaSiFalta(db, 'estacionamientos', 'cargo_boleto_perdido', 'cargo_boleto_perdido REAL NOT NULL DEFAULT 0')
   agregarColumnaSiFalta(db, 'boletos', 'boleto_perdido', "boleto_perdido INTEGER NOT NULL DEFAULT 0 CHECK (boleto_perdido IN (0, 1))")
   agregarColumnaSiFalta(db, 'boletos', 'recargo_boleto_perdido', 'recargo_boleto_perdido REAL')
+  agregarColumnaSiFalta(
+    db,
+    'configuracion_impresion',
+    'ticket_modo_crudo',
+    'ticket_modo_crudo INTEGER NOT NULL DEFAULT 0 CHECK (ticket_modo_crudo IN (0, 1))'
+  )
+  agregarColumnaSiFalta(db, 'configuracion_impresion', 'ticket_usb_vendor_id', 'ticket_usb_vendor_id INTEGER')
+  agregarColumnaSiFalta(db, 'configuracion_impresion', 'ticket_usb_product_id', 'ticket_usb_product_id INTEGER')
 }
 
 function tablaExiste(db: DB, tabla: string): boolean {

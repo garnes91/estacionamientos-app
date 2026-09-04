@@ -2,6 +2,8 @@ import { BrowserWindow, ipcMain } from 'electron'
 import { obtenerDb } from './db'
 import { obtenerEstacionamientoActual } from '../db/estacionamientos'
 import { obtenerConfiguracionImpresion } from '../db/configuracionImpresion'
+import { construirTicketCobro, construirTicketEntrada, construirTicketPensionado } from './escpos'
+import { enviarCrudo } from './escposUsb'
 
 export type TipoImpresion = 'ticket' | 'reporte'
 
@@ -52,31 +54,68 @@ async function abrirVentanaConHtml(html: string, tipo: TipoImpresion): Promise<B
  * src/db/configuracionImpresion.ts), se imprime directo ahí sin preguntar
  * (silent). Si no se ha configurado ninguna, se muestra el diálogo normal
  * de Windows para elegir — así nunca se manda a una impresora "adivinada".
+ *
+ * Si la instalación tiene activado el modo crudo (ver
+ * src/db/configuracionImpresion.ts), un ticket no pasa por nada de esto:
+ * se arma en bytes ESC/POS (ver src/main/escpos.ts) y se manda directo por
+ * USB (ver src/main/escposUsb.ts) — para impresoras térmicas cuyo driver
+ * gráfico no se puede instalar en Windows. `datosTicket` trae los datos
+ * estructurados que ese camino necesita; si el modo crudo está apagado se
+ * ignora y se usa `html` como siempre.
  */
+type DatosTicket =
+  | { variante: 'entrada'; claveFolio: string; datos: Parameters<typeof construirTicketEntrada>[0] }
+  | { variante: 'cobro'; claveFolio: string; datos: Parameters<typeof construirTicketCobro>[0] }
+  | { variante: 'pensionado'; datos: Parameters<typeof construirTicketPensionado>[0] }
+
+function construirBufferTicket(datosTicket: DatosTicket): Buffer {
+  switch (datosTicket.variante) {
+    case 'entrada':
+      return construirTicketEntrada(datosTicket.datos, datosTicket.claveFolio)
+    case 'cobro':
+      return construirTicketCobro(datosTicket.datos, datosTicket.claveFolio)
+    case 'pensionado':
+      return construirTicketPensionado(datosTicket.datos)
+  }
+}
+
 export function registrarImpresion(): void {
-  ipcMain.handle('impresion:imprimir', async (_evento, params: { html: string; tipo: TipoImpresion }) => {
-    const ventana = await abrirVentanaConHtml(params.html, params.tipo)
-    try {
+  ipcMain.handle(
+    'impresion:imprimir',
+    async (_evento, params: { html: string; tipo: TipoImpresion; datosTicket?: DatosTicket }) => {
       const estacionamiento = obtenerEstacionamientoActual(obtenerDb())
       const config = obtenerConfiguracionImpresion(obtenerDb(), estacionamiento.id)
-      const deviceName = params.tipo === 'ticket' ? config?.impresoraTicket : config?.impresoraReporte
 
-      await new Promise<void>((resolve, reject) => {
-        const opciones: Electron.WebContentsPrintOptions = deviceName
-          ? { silent: true, printBackground: true, deviceName }
-          : { silent: false, printBackground: true }
-        ventana.webContents.print(opciones, (success, failureReason) => {
-          if (!success && failureReason !== 'cancelled') {
-            reject(new Error(failureReason))
-            return
-          }
-          resolve()
+      if (params.tipo === 'ticket' && config?.ticketModoCrudo && params.datosTicket) {
+        if (config.ticketUsbVendorId == null || config.ticketUsbProductId == null) {
+          throw new Error('Modo crudo activado pero no hay impresora USB elegida en Admin > Impresión.')
+        }
+        const buffer = construirBufferTicket(params.datosTicket)
+        await enviarCrudo(config.ticketUsbVendorId, config.ticketUsbProductId, buffer)
+        return
+      }
+
+      const ventana = await abrirVentanaConHtml(params.html, params.tipo)
+      try {
+        const deviceName = params.tipo === 'ticket' ? config?.impresoraTicket : config?.impresoraReporte
+
+        await new Promise<void>((resolve, reject) => {
+          const opciones: Electron.WebContentsPrintOptions = deviceName
+            ? { silent: true, printBackground: true, deviceName }
+            : { silent: false, printBackground: true }
+          ventana.webContents.print(opciones, (success, failureReason) => {
+            if (!success && failureReason !== 'cancelled') {
+              reject(new Error(failureReason))
+              return
+            }
+            resolve()
+          })
         })
-      })
-    } finally {
-      if (!ventana.isDestroyed()) ventana.close()
+      } finally {
+        if (!ventana.isDestroyed()) ventana.close()
+      }
     }
-  })
+  )
 }
 
 /** Genera el mismo reporte como PDF (para adjuntar en el correo), en vez de mandarlo a una impresora física. */

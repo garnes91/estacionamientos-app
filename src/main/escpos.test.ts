@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import iconv from 'iconv-lite'
 import { formatearFolio } from '../logic/folioBarcode'
 import { construirTicketCobro, construirTicketEntrada, construirTicketPensionado } from './escpos'
+import { ESQUEMA_COCHE_ALTO, ESQUEMA_COCHE_ANCHO } from './escposEsquemaCoche'
 
 const CLAVE_FOLIO = 'clave-de-prueba'
 
@@ -64,6 +65,28 @@ describe('construirTicketEntrada', () => {
   it('sin placa, no imprime la línea de placa', () => {
     const buffer = construirTicketEntrada(datosBase, CLAVE_FOLIO)
     expect(buffer.indexOf(iconv.encode('Placa:', 'cp850'))).toBe(-1)
+  })
+
+  it('incluye el esquema del coche como imagen rasterizada (GS v 0) antes del corte', () => {
+    const buffer = construirTicketEntrada(datosBase, CLAVE_FOLIO)
+    const anchoBytes = Math.ceil(ESQUEMA_COCHE_ANCHO / 8)
+    // GS v 0 m xL xH yL yH — xL/xH es el ancho EN BYTES, yL/yH el alto en puntos.
+    const encabezadoImagen = Buffer.from([
+      0x1d,
+      0x76,
+      0x30,
+      0,
+      anchoBytes & 0xff,
+      (anchoBytes >> 8) & 0xff,
+      ESQUEMA_COCHE_ALTO & 0xff,
+      (ESQUEMA_COCHE_ALTO >> 8) & 0xff
+    ])
+    const posicionImagen = buffer.indexOf(encabezadoImagen)
+    expect(posicionImagen).toBeGreaterThanOrEqual(0)
+
+    // Los datos de la imagen (anchoBytes * alto) deben caber antes del corte.
+    const finImagen = posicionImagen + encabezadoImagen.length + anchoBytes * ESQUEMA_COCHE_ALTO
+    expect(buffer.indexOf(Buffer.from([0x1d, 0x56, 66]), finImagen)).toBeGreaterThanOrEqual(finImagen)
   })
 })
 

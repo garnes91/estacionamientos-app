@@ -1,19 +1,18 @@
 import iconv from 'iconv-lite'
 import { formatearFolio } from '../logic/folioBarcode'
+import { ESQUEMA_COCHE_ALTO, ESQUEMA_COCHE_ANCHO, ESQUEMA_COCHE_DATOS_BASE64 } from './escposEsquemaCoche'
 
 /**
- * Construye los bytes ESC/POS de un ticket para mandarlos crudos por USB
- * (ver src/main/escposUsb.ts) — sin pasar por el sistema de impresión de
- * Windows, para impresoras cuyo driver gráfico no se puede instalar (ver
- * plan de esta sesión: certificado no confiable, Secure Boot, etc.).
+ * Construye los bytes ESC/POS de un ticket para mandarlos crudos (ver
+ * src/main/escposUsb.ts en Mac/Linux, src/main/escposWindows.ts en
+ * Windows) — sin pasar por el sistema de impresión gráfico, para
+ * impresoras cuyo driver no se puede instalar (ver plan de esta sesión:
+ * certificado no confiable, Secure Boot, Zadig bloqueado, etc.).
  *
  * Reusa las mismas interfaces de datos que ya arman los componentes React
  * imprimibles (DatosBoletoImprimible, DatosReciboCobro,
  * DatosTicketPensionado) — este archivo es JS puro, sin dependencias de
  * Electron/USB, así que se puede probar sin hardware (ver escpos.test.ts).
- *
- * No incluye el esquema del coche (imagen) — fuera de alcance de esta
- * primera versión, ver el plan.
  */
 
 // Código de página CP850 (Multilingual) — cubre acentos y ñ del español.
@@ -87,6 +86,33 @@ function barcode(valor: string): Buffer {
 }
 
 /**
+ * Comando de imagen rasterizada (GS v 0) con el esquema del coche para
+ * marcar daños — el mismo bitmap blanco/negro puro que ya se usa en la
+ * vista HTML (ver src/renderer/binarizarImagen.ts), precalculado una sola
+ * vez porque es un asset fijo que no cambia entre boletos (ver
+ * src/main/escposEsquemaCoche.ts). "xL xH" del comando son el ancho EN
+ * BYTES (no en puntos) — de ahí el ceil(ancho/8).
+ */
+function imagenEsquemaCoche(): Buffer {
+  const datos = Buffer.from(ESQUEMA_COCHE_DATOS_BASE64, 'base64')
+  const anchoBytes = Math.ceil(ESQUEMA_COCHE_ANCHO / 8)
+  return Buffer.concat([
+    alinear('centro'),
+    Buffer.from([
+      GS,
+      0x76,
+      0x30,
+      0,
+      anchoBytes & 0xff,
+      (anchoBytes >> 8) & 0xff,
+      ESQUEMA_COCHE_ALTO & 0xff,
+      (ESQUEMA_COCHE_ALTO >> 8) & 0xff
+    ]),
+    datos
+  ])
+}
+
+/**
  * Avanza el papel y corta (comando "feed and full cut" de ESC/POS: GS V 66 n).
  * El cortador queda varios mm abajo del cabezal de impresión — cortar sin
  * avanzar antes (como se hacía con GS V 0 + un par de saltos de línea)
@@ -137,6 +163,7 @@ export function construirTicketEntrada(datos: DatosBoletoImprimibleEscpos, clave
   partes.push(barcode(textoFolio))
   partes.push(linea())
   partes.push(texto('Marcar daños visibles al ingresar:', { centrado: true }))
+  partes.push(imagenEsquemaCoche())
   partes.push(cortar())
 
   return Buffer.concat(partes)

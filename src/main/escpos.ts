@@ -25,8 +25,17 @@ const TABLA_CODIGO_CP850 = 2
 const ESC = 0x1b
 const GS = 0x1d
 
+/**
+ * Comando de inicio (reset + tabla de código) + una línea en blanco de
+ * sacrificio. Reportado en hardware real: a veces se pierde el primer
+ * milímetro del encabezado (el cabezal/buffer de la térmica no arranca
+ * listo justo con los primeros bytes de un trabajo nuevo) — igual que ya
+ * pasaba en el camino HTML viejo (ver el comentario de "relleno" en
+ * src/main/print.ts), se sacrifica una línea en blanco al inicio para que
+ * ese ruido caiga ahí y no sobre el nombre/folio real.
+ */
 function iniciar(): Buffer {
-  return Buffer.from([ESC, 0x40, ESC, 0x74, TABLA_CODIGO_CP850])
+  return Buffer.concat([Buffer.from([ESC, 0x40, ESC, 0x74, TABLA_CODIGO_CP850]), saltoLinea()])
 }
 
 function negritas(activar: boolean): Buffer {
@@ -202,11 +211,11 @@ export function construirTicketCobro(datos: DatosReciboCobroEscpos, claveFolio: 
   partes.push(linea())
 
   if (datos.tipoCobro === 'regular') {
-    partes.push(texto(`Tiempo: ${datos.minutosTotales} min — $${montoSinRecargo.toFixed(2)}`))
+    partes.push(texto(`Tiempo: ${datos.minutosTotales} min - $${montoSinRecargo.toFixed(2)}`))
   } else {
     partes.push(texto(`Tarifa plana: $${(montoFijo ?? 0).toFixed(2)}`))
     if (datos.excedenteMinutos) {
-      partes.push(texto(`Excedente: ${datos.excedenteMinutos} min — $${(datos.excedenteMonto ?? 0).toFixed(2)}`))
+      partes.push(texto(`Excedente: ${datos.excedenteMinutos} min - $${(datos.excedenteMonto ?? 0).toFixed(2)}`))
     }
   }
   if (recargoBoletoPerdido) {
@@ -237,7 +246,7 @@ export interface DatosTicketPensionadoEscpos {
 const TITULOS_PENSIONADO: Record<DatosTicketPensionadoEscpos['tipo'], string> = {
   alta: 'Alta de pensionado',
   baja: 'Baja de pensionado',
-  pago: 'Recibo de pago — pensionado'
+  pago: 'Recibo de pago - pensionado'
 }
 
 export function construirTicketPensionado(datos: DatosTicketPensionadoEscpos): Buffer {
@@ -250,7 +259,7 @@ export function construirTicketPensionado(datos: DatosTicketPensionadoEscpos): B
   partes.push(linea())
   partes.push(texto(`Nombre: ${datos.nombre}`))
   partes.push(texto(`Vehículo: ${datos.tipoVehiculo}`))
-  partes.push(texto(`Placa: ${datos.placa ?? '—'}`))
+  partes.push(texto(`Placa: ${datos.placa ?? '-'}`))
 
   if ((datos.tipo === 'alta' || datos.tipo === 'baja') && datos.cuotaMensual != null) {
     partes.push(texto(`Cuota mensual: $${datos.cuotaMensual.toFixed(2)}`))
@@ -258,13 +267,96 @@ export function construirTicketPensionado(datos: DatosTicketPensionadoEscpos): B
   if (datos.tipo === 'pago') {
     const desde = new Date(datos.periodoDesde!).toLocaleDateString('es-MX')
     const hasta = new Date(datos.periodoHasta!).toLocaleDateString('es-MX')
-    partes.push(texto(`Periodo: ${desde} — ${hasta}`))
+    partes.push(texto(`Periodo: ${desde} - ${hasta}`))
     partes.push(texto(`Monto pagado: $${datos.monto!.toFixed(2)}`, { negrita: true }))
   }
 
   partes.push(linea())
   partes.push(saltoLinea())
   partes.push(texto('Firma: ________________________'))
+  partes.push(cortar())
+
+  return Buffer.concat(partes)
+}
+
+export interface DatosReporteCorteEscpos {
+  estacionamientoNombre: string
+  generadoPor: string
+  soloSerieA: boolean
+  desde: string
+  hasta: string
+  porTipoVehiculo: { tipoVehiculo: string; boletos: number; monto: number }[]
+  altasPensionados: string[]
+  bajasPensionados: string[]
+  pagosPensionados: { pensionadoNombre: string; monto: number }[]
+  gastosDelPeriodo: { concepto: string; monto: number }[]
+  totalBoletos: number
+  totalMonto: number
+  pensionadosPagosCantidad: number
+  pensionadosPagosMonto: number
+  gastosEfectivoCantidad: number
+  gastosEfectivoMonto: number
+}
+
+/**
+ * Versión resumida (no el detalle línea por línea de cada boleto) del
+ * corte de caja general para modo crudo — el detalle completo YA se manda
+ * por correo en PDF/Excel al generar el corte (ver enviarPorCorreo en
+ * CorteCaja.tsx), así que el papel solo necesita los totales para el
+ * respaldo físico inmediato en caja.
+ */
+export function construirReporteCorte(datos: DatosReporteCorteEscpos): Buffer {
+  const totalEnCaja = datos.totalMonto + datos.pensionadosPagosMonto - datos.gastosEfectivoMonto
+  const partes: Buffer[] = [iniciar(), texto(datos.estacionamientoNombre, { centrado: true, negrita: true })]
+
+  partes.push(texto('Corte de caja', { centrado: true }))
+  partes.push(linea())
+  const etiquetaPeriodo = datos.soloSerieA ? 'Periodo' : 'Periodo (pensionados y gastos)'
+  partes.push(texto(`${etiquetaPeriodo}:`))
+  partes.push(texto(`${new Date(datos.desde).toLocaleString()} a`))
+  partes.push(texto(new Date(datos.hasta).toLocaleString()))
+  partes.push(texto(`Generado por: ${datos.generadoPor}`))
+
+  partes.push(linea())
+  partes.push(texto('Por tipo de vehiculo:', { negrita: true }))
+  for (const fila of datos.porTipoVehiculo) {
+    partes.push(texto(`${fila.tipoVehiculo}: ${fila.boletos} - $${fila.monto.toFixed(2)}`))
+  }
+
+  if (datos.altasPensionados.length > 0 || datos.bajasPensionados.length > 0 || datos.pagosPensionados.length > 0) {
+    partes.push(linea())
+    partes.push(texto('Pensionados:', { negrita: true }))
+    if (datos.altasPensionados.length > 0) {
+      partes.push(texto(`Altas (${datos.altasPensionados.length}): ${datos.altasPensionados.join(', ')}`))
+    }
+    if (datos.bajasPensionados.length > 0) {
+      partes.push(texto(`Bajas (${datos.bajasPensionados.length}): ${datos.bajasPensionados.join(', ')}`))
+    }
+    for (const p of datos.pagosPensionados) {
+      partes.push(texto(`${p.pensionadoNombre}: $${p.monto.toFixed(2)}`))
+    }
+  }
+
+  if (datos.gastosDelPeriodo.length > 0) {
+    partes.push(linea())
+    partes.push(texto('Gastos:', { negrita: true }))
+    for (const g of datos.gastosDelPeriodo) {
+      partes.push(texto(`${g.concepto}: $${g.monto.toFixed(2)}`))
+    }
+  }
+
+  partes.push(linea())
+  partes.push(texto(`Total boletos: ${datos.totalBoletos} - $${datos.totalMonto.toFixed(2)}`, { negrita: true }))
+  if (datos.pensionadosPagosMonto > 0) {
+    partes.push(texto(`Pensionados: ${datos.pensionadosPagosCantidad} pagos - $${datos.pensionadosPagosMonto.toFixed(2)}`))
+  }
+  if (datos.gastosEfectivoMonto > 0) {
+    partes.push(texto(`Gastos en efectivo: ${datos.gastosEfectivoCantidad} - -$${datos.gastosEfectivoMonto.toFixed(2)}`))
+  }
+  partes.push(linea())
+  partes.push(texto(`TOTAL EN CAJA: $${totalEnCaja.toFixed(2)}`, { centrado: true, negrita: true }))
+  partes.push(saltoLinea())
+  partes.push(texto('(Detalle completo por boleto enviado por correo)', { centrado: true }))
   partes.push(cortar())
 
   return Buffer.concat(partes)

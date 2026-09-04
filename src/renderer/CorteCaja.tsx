@@ -164,11 +164,46 @@ export function CorteCaja({
     }
   }
 
-  async function imprimirElemento(id: string): Promise<void> {
+  /**
+   * `conDatosCrudo`: solo el corte general trae los datos estructurados
+   * para el modo crudo (ver src/main/escpos.ts, construirReporteCorte) —
+   * el corte por serie sigue imprimiéndose vía HTML por ahora.
+   */
+  async function imprimirElemento(id: string, conDatosCrudo: boolean): Promise<void> {
     const elemento = document.getElementById(id)
     if (!elemento) return
     try {
-      await window.api.imprimir({ html: elemento.outerHTML, tipo: 'reporte' })
+      await window.api.imprimir({
+        html: elemento.outerHTML,
+        tipo: 'reporte',
+        datosReporte:
+          conDatosCrudo && detalleActual
+            ? {
+                estacionamientoNombre: nombreEstacionamiento,
+                generadoPor: nombreUsuario,
+                soloSerieA,
+                desde: detalleActual.desde,
+                hasta: detalleActual.hasta,
+                porTipoVehiculo: detalleActual.porTipoVehiculo,
+                altasPensionados: detalleActual.altasPensionados.map((a) => a.nombre),
+                bajasPensionados: detalleActual.bajasPensionados.map((b) => b.nombre),
+                pagosPensionados: detalleActual.pagosPensionados.map((p) => ({
+                  pensionadoNombre: p.pensionadoNombre,
+                  monto: p.monto
+                })),
+                gastosDelPeriodo: detalleActual.gastosDelPeriodo.map((g) => ({
+                  concepto: g.concepto,
+                  monto: g.monto
+                })),
+                totalBoletos: detalleActual.totalBoletos,
+                totalMonto: detalleActual.totalMonto,
+                pensionadosPagosCantidad: detalleActual.pensionadosPagosCantidad,
+                pensionadosPagosMonto: detalleActual.pensionadosPagosMonto,
+                gastosEfectivoCantidad: detalleActual.gastosEfectivoCantidad,
+                gastosEfectivoMonto: detalleActual.gastosEfectivoMonto
+              }
+            : undefined
+      })
     } catch (e) {
       setError(String(e))
     }
@@ -202,7 +237,7 @@ export function CorteCaja({
   useEffect(() => {
     if (!detalleActual || !justoGeneradoRef.current) return
     justoGeneradoRef.current = false
-    imprimirElemento('corte-general-imprimible')
+    imprimirElemento('corte-general-imprimible', true)
     enviarPorCorreo(true)
   }, [detalleActual])
 
@@ -229,7 +264,7 @@ export function CorteCaja({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0.5rem 0' }}>
             <h2 style={{ margin: 0 }}>Corte general</h2>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button onClick={() => imprimirElemento('corte-general-imprimible')}>Reimprimir corte general</button>
+              <button onClick={() => imprimirElemento('corte-general-imprimible', true)}>Reimprimir corte general</button>
               <button onClick={() => enviarPorCorreo()} disabled={enviando}>
                 Reenviar por correo
               </button>
@@ -380,7 +415,7 @@ export function CorteCaja({
                     <h3 style={{ margin: 0 }}>
                       Serie {s.serie} — {s.totalBoletos} boletos, ${s.totalMonto.toFixed(2)}
                     </h3>
-                    <button onClick={() => imprimirElemento(`corte-serie-${s.serie}-imprimible`)}>
+                    <button onClick={() => imprimirElemento(`corte-serie-${s.serie}-imprimible`, false)}>
                       Imprimir serie {s.serie}
                     </button>
                   </div>

@@ -328,6 +328,24 @@ declare global {
                 periodoHasta?: string
               }
             }
+        datosReporte?: {
+          estacionamientoNombre: string
+          generadoPor: string
+          soloSerieA: boolean
+          desde: string
+          hasta: string
+          porTipoVehiculo: { tipoVehiculo: string; boletos: number; monto: number }[]
+          altasPensionados: string[]
+          bajasPensionados: string[]
+          pagosPensionados: { pensionadoNombre: string; monto: number }[]
+          gastosDelPeriodo: { concepto: string; monto: number }[]
+          totalBoletos: number
+          totalMonto: number
+          pensionadosPagosCantidad: number
+          pensionadosPagosMonto: number
+          gastosEfectivoCantidad: number
+          gastosEfectivoMonto: number
+        }
       }) => Promise<void>
       emitirBoleto: (params: {
         estacionamientoId: number

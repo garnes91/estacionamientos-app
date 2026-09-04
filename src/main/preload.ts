@@ -76,6 +76,28 @@ contextBridge.exposeInMainWorld('api', {
             periodoHasta?: string
           }
         }
+    // Datos estructurados del corte de caja general — igual que
+    // datosTicket, solo se usan en modo crudo (ver src/main/escpos.ts,
+    // construirReporteCorte). Solo aplica al reporte de CorteCaja.tsx por
+    // ahora (no al corte por serie ni a CorteMensual.tsx).
+    datosReporte?: {
+      estacionamientoNombre: string
+      generadoPor: string
+      soloSerieA: boolean
+      desde: string
+      hasta: string
+      porTipoVehiculo: { tipoVehiculo: string; boletos: number; monto: number }[]
+      altasPensionados: string[]
+      bajasPensionados: string[]
+      pagosPensionados: { pensionadoNombre: string; monto: number }[]
+      gastosDelPeriodo: { concepto: string; monto: number }[]
+      totalBoletos: number
+      totalMonto: number
+      pensionadosPagosCantidad: number
+      pensionadosPagosMonto: number
+      gastosEfectivoCantidad: number
+      gastosEfectivoMonto: number
+    }
   }) => ipcRenderer.invoke('impresion:imprimir', params),
   emitirBoleto: (params: {
     estacionamientoId: number

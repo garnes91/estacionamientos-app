@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import iconv from 'iconv-lite'
 import { formatearFolio } from '../logic/folioBarcode'
-import { construirTicketCobro, construirTicketEntrada, construirTicketPensionado } from './escpos'
+import { construirReporteCorte, construirTicketCobro, construirTicketEntrada, construirTicketPensionado } from './escpos'
 import { ESQUEMA_COCHE_ALTO, ESQUEMA_COCHE_ANCHO } from './escposEsquemaCoche'
 
 const CLAVE_FOLIO = 'clave-de-prueba'
@@ -18,16 +18,17 @@ describe('construirTicketEntrada', () => {
     tarifaPlana: null
   }
 
-  it('empieza con el comando de inicio (ESC @) y selección de código de página', () => {
+  it('empieza con el comando de inicio (ESC @), selección de código de página y una línea en blanco de sacrificio', () => {
     const buffer = construirTicketEntrada(datosBase, CLAVE_FOLIO)
-    expect(buffer.subarray(0, 5)).toEqual(Buffer.from([0x1b, 0x40, 0x1b, 0x74, 2]))
+    // ESC @, ESC t 2 (tabla CP850), 0x0A (línea en blanco para el buffer de la térmica).
+    expect(buffer.subarray(0, 6)).toEqual(Buffer.from([0x1b, 0x40, 0x1b, 0x74, 2, 0x0a]))
   })
 
   it('el nombre del estacionamiento va centrado y en negritas', () => {
     const buffer = construirTicketEntrada(datosBase, CLAVE_FOLIO)
     // ESC a 1 (centrado) seguido de ESC E 1 (negritas) antes del texto codificado.
     const centradoYNegritas = Buffer.from([0x1b, 0x61, 1, 0x1b, 0x45, 1])
-    expect(buffer.indexOf(centradoYNegritas)).toBe(5)
+    expect(buffer.indexOf(centradoYNegritas)).toBe(6)
   })
 
   it('codifica acentos/ñ en CP850, no en UTF-8 crudo', () => {
@@ -103,14 +104,14 @@ describe('construirTicketCobro', () => {
 
   it('cobro regular: muestra el tiempo y el monto sin recargo aparte', () => {
     const buffer = construirTicketCobro(datosBase, CLAVE_FOLIO)
-    expect(buffer.indexOf(iconv.encode('Tiempo: 60 min — $40.00', 'cp850'))).toBeGreaterThanOrEqual(0)
+    expect(buffer.indexOf(iconv.encode('Tiempo: 60 min - $40.00', 'cp850'))).toBeGreaterThanOrEqual(0)
     expect(buffer.indexOf(iconv.encode('Total: $40.00', 'cp850'))).toBeGreaterThanOrEqual(0)
   })
 
   it('con recargo de boleto perdido: lo desglosa aparte del cálculo normal', () => {
     const buffer = construirTicketCobro({ ...datosBase, monto: 90, recargoBoletoPerdido: 50 }, CLAVE_FOLIO)
     // El desglose de tiempo es sobre el monto SIN el recargo (90 - 50 = 40).
-    expect(buffer.indexOf(iconv.encode('Tiempo: 60 min — $40.00', 'cp850'))).toBeGreaterThanOrEqual(0)
+    expect(buffer.indexOf(iconv.encode('Tiempo: 60 min - $40.00', 'cp850'))).toBeGreaterThanOrEqual(0)
     expect(buffer.indexOf(iconv.encode('Recargo boleto perdido: $50.00', 'cp850'))).toBeGreaterThanOrEqual(0)
     expect(buffer.indexOf(iconv.encode('Total: $90.00', 'cp850'))).toBeGreaterThanOrEqual(0)
   })
@@ -121,7 +122,17 @@ describe('construirTicketCobro', () => {
       CLAVE_FOLIO
     )
     expect(buffer.indexOf(iconv.encode('Tarifa plana: $80.00', 'cp850'))).toBeGreaterThanOrEqual(0)
-    expect(buffer.indexOf(iconv.encode('Excedente: 60 min — $40.00', 'cp850'))).toBeGreaterThanOrEqual(0)
+    expect(buffer.indexOf(iconv.encode('Excedente: 60 min - $40.00', 'cp850'))).toBeGreaterThanOrEqual(0)
+  })
+
+  it('no usa el guion largo "—" (CP850 no lo tiene, sale como "?" en la impresora)', () => {
+    const buffer = construirTicketCobro(
+      { ...datosBase, tipoCobro: 'plana', monto: 120, excedenteMinutos: 60, excedenteMonto: 40 },
+      CLAVE_FOLIO
+    )
+    // 0x3F es el caracter de reemplazo ('?') que usa iconv-lite cuando el
+    // texto original tiene algo que la tabla CP850 no puede representar.
+    expect(buffer.includes(Buffer.from([0x3f]))).toBe(false)
   })
 })
 
@@ -155,8 +166,74 @@ describe('construirTicketPensionado', () => {
     expect(buffer.indexOf(iconv.encode('Monto pagado:', 'cp850'))).toBe(-1)
   })
 
-  it('sin placa, muestra un guion largo', () => {
+  it('sin placa, muestra un guion (no el guion largo, sale como "?" en CP850)', () => {
     const buffer = construirTicketPensionado({ ...datosBase, placa: null })
-    expect(buffer.indexOf(iconv.encode('Placa: —', 'cp850'))).toBeGreaterThanOrEqual(0)
+    expect(buffer.indexOf(iconv.encode('Placa: -', 'cp850'))).toBeGreaterThanOrEqual(0)
+  })
+})
+
+describe('construirReporteCorte', () => {
+  const datosBase = {
+    estacionamientoNombre: 'Estación Central',
+    generadoPor: 'admin',
+    soloSerieA: false,
+    desde: '2026-09-01T00:00:00.000Z',
+    hasta: '2026-09-01T23:59:59.000Z',
+    porTipoVehiculo: [{ tipoVehiculo: 'Auto', boletos: 10, monto: 400 }],
+    altasPensionados: [] as string[],
+    bajasPensionados: [] as string[],
+    pagosPensionados: [] as { pensionadoNombre: string; monto: number }[],
+    gastosDelPeriodo: [] as { concepto: string; monto: number }[],
+    totalBoletos: 10,
+    totalMonto: 400,
+    pensionadosPagosCantidad: 0,
+    pensionadosPagosMonto: 0,
+    gastosEfectivoCantidad: 0,
+    gastosEfectivoMonto: 0
+  }
+
+  it('incluye el nombre, el periodo y el desglose por tipo de vehículo', () => {
+    const buffer = construirReporteCorte(datosBase)
+    expect(buffer.indexOf(iconv.encode('Corte de caja', 'cp850'))).toBeGreaterThanOrEqual(0)
+    expect(buffer.indexOf(iconv.encode('Auto: 10 - $400.00', 'cp850'))).toBeGreaterThanOrEqual(0)
+  })
+
+  it('calcula el total en caja (boletos + pensionados - gastos)', () => {
+    const buffer = construirReporteCorte({
+      ...datosBase,
+      pagosPensionados: [{ pensionadoNombre: 'Juan Pérez', monto: 500 }],
+      pensionadosPagosCantidad: 1,
+      pensionadosPagosMonto: 500,
+      gastosDelPeriodo: [{ concepto: 'Papel térmico', monto: 100 }],
+      gastosEfectivoCantidad: 1,
+      gastosEfectivoMonto: 100
+    })
+    // 400 + 500 - 100 = 800
+    expect(buffer.indexOf(iconv.encode('TOTAL EN CAJA: $800.00', 'cp850'))).toBeGreaterThanOrEqual(0)
+    expect(buffer.indexOf(iconv.encode('Juan Pérez: $500.00', 'cp850'))).toBeGreaterThanOrEqual(0)
+    expect(buffer.indexOf(iconv.encode('Papel térmico: $100.00', 'cp850'))).toBeGreaterThanOrEqual(0)
+  })
+
+  it('sin pensionados ni gastos en el periodo, no imprime esas secciones', () => {
+    const buffer = construirReporteCorte(datosBase)
+    expect(buffer.indexOf(iconv.encode('Pensionados:', 'cp850'))).toBe(-1)
+    expect(buffer.indexOf(iconv.encode('Gastos:', 'cp850'))).toBe(-1)
+  })
+
+  it('termina con el comando de corte', () => {
+    const buffer = construirReporteCorte(datosBase)
+    const corte = Buffer.from([0x1d, 0x56, 66, 50])
+    expect(buffer.subarray(buffer.length - 4)).toEqual(corte)
+  })
+
+  it('no usa el guion largo "—" en ningún texto', () => {
+    const buffer = construirReporteCorte({
+      ...datosBase,
+      altasPensionados: ['Ana'],
+      bajasPensionados: ['Luis'],
+      pagosPensionados: [{ pensionadoNombre: 'Juan Pérez', monto: 500 }],
+      gastosDelPeriodo: [{ concepto: 'Papel térmico', monto: 100 }]
+    })
+    expect(buffer.includes(Buffer.from([0x3f]))).toBe(false)
   })
 })

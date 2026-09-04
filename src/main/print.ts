@@ -13,6 +13,12 @@ function construirDocumento(html: string, tipo: TipoImpresion): string {
   // caer fuera de lo que la impresora realmente puede marcar. body ya no
   // necesita su propio padding para esto, el margen de @page basta.
   const pagina = tipo === 'ticket' ? '@page { size: 80mm auto; margin: 2mm; }' : '@page { margin: 1cm; }'
+  // Impresoras térmicas baratas suelen "tragarse"/corromper las primeras
+  // líneas de cada trabajo de impresión nuevo (el cabezal/buffer no
+  // arranca listo justo con los primeros bytes) — se sacrifican 2 líneas
+  // en blanco al inicio del ticket para que ese ruido caiga ahí y no sobre
+  // el nombre/folio real.
+  const relleno = tipo === 'ticket' ? '<div>&nbsp;</div><div>&nbsp;</div>' : ''
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -22,7 +28,7 @@ function construirDocumento(html: string, tipo: TipoImpresion): string {
   body { margin: 0; padding: 0; font-family: sans-serif; }
 </style>
 </head>
-<body>${html}</body>
+<body>${relleno}${html}</body>
 </html>`
 }
 

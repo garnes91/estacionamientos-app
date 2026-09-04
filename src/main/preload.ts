@@ -76,28 +76,54 @@ contextBridge.exposeInMainWorld('api', {
             periodoHasta?: string
           }
         }
-    // Datos estructurados del corte de caja general — igual que
-    // datosTicket, solo se usan en modo crudo (ver src/main/escpos.ts,
-    // construirReporteCorte). Solo aplica al reporte de CorteCaja.tsx por
-    // ahora (no al corte por serie ni a CorteMensual.tsx).
-    datosReporte?: {
-      estacionamientoNombre: string
-      generadoPor: string
-      soloSerieA: boolean
-      desde: string
-      hasta: string
-      porTipoVehiculo: { tipoVehiculo: string; boletos: number; monto: number }[]
-      altasPensionados: string[]
-      bajasPensionados: string[]
-      pagosPensionados: { pensionadoNombre: string; monto: number }[]
-      gastosDelPeriodo: { concepto: string; monto: number }[]
-      totalBoletos: number
-      totalMonto: number
-      pensionadosPagosCantidad: number
-      pensionadosPagosMonto: number
-      gastosEfectivoCantidad: number
-      gastosEfectivoMonto: number
-    }
+    // Datos estructurados del corte de caja — igual que datosTicket, solo
+    // se usan en modo crudo (ver src/main/escpos.ts). CorteCaja.tsx manda
+    // tanto el corte general (resumen, sin detalle por boleto — ese ya se
+    // manda por correo en PDF/Excel) como el corte por serie (sí con
+    // detalle, es su propósito). CorteMensual.tsx todavía no manda esto.
+    datosReporte?:
+      | {
+          variante: 'general'
+          datos: {
+            estacionamientoNombre: string
+            generadoPor: string
+            soloSerieA: boolean
+            desde: string
+            hasta: string
+            porTipoVehiculo: { tipoVehiculo: string; boletos: number; monto: number }[]
+            altasPensionados: string[]
+            bajasPensionados: string[]
+            pagosPensionados: { pensionadoNombre: string; monto: number }[]
+            gastosDelPeriodo: { concepto: string; monto: number }[]
+            totalBoletos: number
+            totalMonto: number
+            pensionadosPagosCantidad: number
+            pensionadosPagosMonto: number
+            gastosEfectivoCantidad: number
+            gastosEfectivoMonto: number
+          }
+        }
+      | {
+          variante: 'serie'
+          claveFolio: string
+          datos: {
+            estacionamientoNombre: string
+            generadoPor: string
+            serie: string
+            desde: string
+            hasta: string
+            boletos: {
+              serie: string
+              folio: number
+              tipoVehiculo: string
+              horaEntrada: string
+              horaSalida: string
+              monto: number
+            }[]
+            totalBoletos: number
+            totalMonto: number
+          }
+        }
   }) => ipcRenderer.invoke('impresion:imprimir', params),
   emitirBoleto: (params: {
     estacionamientoId: number

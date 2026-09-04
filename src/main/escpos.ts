@@ -361,3 +361,65 @@ export function construirReporteCorte(datos: DatosReporteCorteEscpos): Buffer {
 
   return Buffer.concat(partes)
 }
+
+export interface DatosReporteCorteSerieEscpos {
+  estacionamientoNombre: string
+  generadoPor: string
+  serie: string
+  desde: string
+  hasta: string
+  boletos: {
+    serie: string
+    folio: number
+    tipoVehiculo: string
+    horaEntrada: string
+    horaSalida: string
+    monto: number
+  }[]
+  totalBoletos: number
+  totalMonto: number
+}
+
+const FORMATO_FECHA_CORTA: Intl.DateTimeFormatOptions = {
+  day: '2-digit',
+  month: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit'
+}
+
+/**
+ * Corte de caja de UNA serie (botón "Imprimir serie X" en CorteCaja.tsx) —
+ * a diferencia del corte general, aquí SÍ va el detalle boleto por boleto
+ * (es justo el propósito de este reporte: la lista física para conciliar
+ * esa serie en particular), en dos líneas por boleto para cubrir bien el
+ * folio, vehículo, horarios y monto sin depender de columnas exactas.
+ */
+export function construirReporteCorteSerie(datos: DatosReporteCorteSerieEscpos, claveFolio: string): Buffer {
+  const partes: Buffer[] = [iniciar(), texto(datos.estacionamientoNombre, { centrado: true, negrita: true })]
+
+  partes.push(texto(`Corte de caja - serie ${datos.serie}`, { centrado: true }))
+  partes.push(linea())
+  partes.push(texto(`Periodo: ${new Date(datos.desde).toLocaleString()} a`))
+  partes.push(texto(new Date(datos.hasta).toLocaleString()))
+  partes.push(texto(`Generado por: ${datos.generadoPor}`))
+  partes.push(linea())
+
+  for (const b of datos.boletos) {
+    const folioTexto = formatearFolio(b.serie, b.folio, claveFolio)
+    const entrada = new Date(b.horaEntrada).toLocaleString('es-MX', FORMATO_FECHA_CORTA)
+    const salida = new Date(b.horaSalida).toLocaleString('es-MX', FORMATO_FECHA_CORTA)
+    partes.push(texto(`${folioTexto}  ${b.tipoVehiculo}  $${b.monto.toFixed(2)}`))
+    partes.push(texto(`  ${entrada} a ${salida}`))
+  }
+
+  partes.push(linea())
+  partes.push(
+    texto(`Total serie ${datos.serie}: ${datos.totalBoletos} boletos, $${datos.totalMonto.toFixed(2)}`, {
+      negrita: true
+    })
+  )
+  partes.push(saltoLinea())
+  partes.push(cortar())
+
+  return Buffer.concat(partes)
+}

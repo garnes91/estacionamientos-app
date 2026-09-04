@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import iconv from 'iconv-lite'
 import { formatearFolio } from '../logic/folioBarcode'
-import { construirReporteCorte, construirTicketCobro, construirTicketEntrada, construirTicketPensionado } from './escpos'
+import {
+  construirReporteCorte,
+  construirReporteCorteSerie,
+  construirTicketCobro,
+  construirTicketEntrada,
+  construirTicketPensionado
+} from './escpos'
 import { ESQUEMA_COCHE_ALTO, ESQUEMA_COCHE_ANCHO } from './escposEsquemaCoche'
 
 const CLAVE_FOLIO = 'clave-de-prueba'
@@ -234,6 +240,46 @@ describe('construirReporteCorte', () => {
       pagosPensionados: [{ pensionadoNombre: 'Juan Pérez', monto: 500 }],
       gastosDelPeriodo: [{ concepto: 'Papel térmico', monto: 100 }]
     })
+    expect(buffer.includes(Buffer.from([0x3f]))).toBe(false)
+  })
+})
+
+describe('construirReporteCorteSerie', () => {
+  const datosBase = {
+    estacionamientoNombre: 'Estación Central',
+    generadoPor: 'admin',
+    serie: 'A',
+    desde: '2026-09-01T00:00:00.000Z',
+    hasta: '2026-09-01T23:59:59.000Z',
+    boletos: [
+      {
+        serie: 'A',
+        folio: 176,
+        tipoVehiculo: 'Auto',
+        horaEntrada: '2026-09-01T12:00:00.000Z',
+        horaSalida: '2026-09-01T13:30:00.000Z',
+        monto: 40
+      }
+    ],
+    totalBoletos: 1,
+    totalMonto: 40
+  }
+
+  it('incluye el folio (formateado con formatearFolio) de cada boleto y el total de la serie', () => {
+    const buffer = construirReporteCorteSerie(datosBase, CLAVE_FOLIO)
+    const folioTexto = formatearFolio('A', 176, CLAVE_FOLIO)
+    expect(buffer.indexOf(iconv.encode(folioTexto, 'cp850'))).toBeGreaterThanOrEqual(0)
+    expect(buffer.indexOf(iconv.encode('Total serie A: 1 boletos, $40.00', 'cp850'))).toBeGreaterThanOrEqual(0)
+  })
+
+  it('termina con el comando de corte', () => {
+    const buffer = construirReporteCorteSerie(datosBase, CLAVE_FOLIO)
+    const corte = Buffer.from([0x1d, 0x56, 66, 50])
+    expect(buffer.subarray(buffer.length - 4)).toEqual(corte)
+  })
+
+  it('no usa el guion largo "—" en ningún texto', () => {
+    const buffer = construirReporteCorteSerie(datosBase, CLAVE_FOLIO)
     expect(buffer.includes(Buffer.from([0x3f]))).toBe(false)
   })
 })

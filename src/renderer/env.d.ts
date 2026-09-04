@@ -328,24 +328,49 @@ declare global {
                 periodoHasta?: string
               }
             }
-        datosReporte?: {
-          estacionamientoNombre: string
-          generadoPor: string
-          soloSerieA: boolean
-          desde: string
-          hasta: string
-          porTipoVehiculo: { tipoVehiculo: string; boletos: number; monto: number }[]
-          altasPensionados: string[]
-          bajasPensionados: string[]
-          pagosPensionados: { pensionadoNombre: string; monto: number }[]
-          gastosDelPeriodo: { concepto: string; monto: number }[]
-          totalBoletos: number
-          totalMonto: number
-          pensionadosPagosCantidad: number
-          pensionadosPagosMonto: number
-          gastosEfectivoCantidad: number
-          gastosEfectivoMonto: number
-        }
+        datosReporte?:
+          | {
+              variante: 'general'
+              datos: {
+                estacionamientoNombre: string
+                generadoPor: string
+                soloSerieA: boolean
+                desde: string
+                hasta: string
+                porTipoVehiculo: { tipoVehiculo: string; boletos: number; monto: number }[]
+                altasPensionados: string[]
+                bajasPensionados: string[]
+                pagosPensionados: { pensionadoNombre: string; monto: number }[]
+                gastosDelPeriodo: { concepto: string; monto: number }[]
+                totalBoletos: number
+                totalMonto: number
+                pensionadosPagosCantidad: number
+                pensionadosPagosMonto: number
+                gastosEfectivoCantidad: number
+                gastosEfectivoMonto: number
+              }
+            }
+          | {
+              variante: 'serie'
+              claveFolio: string
+              datos: {
+                estacionamientoNombre: string
+                generadoPor: string
+                serie: string
+                desde: string
+                hasta: string
+                boletos: {
+                  serie: string
+                  folio: number
+                  tipoVehiculo: string
+                  horaEntrada: string
+                  horaSalida: string
+                  monto: number
+                }[]
+                totalBoletos: number
+                totalMonto: number
+              }
+            }
       }) => Promise<void>
       emitirBoleto: (params: {
         estacionamientoId: number

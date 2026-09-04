@@ -4,10 +4,10 @@ import { obtenerEstacionamientoActual } from '../db/estacionamientos'
 import { obtenerConfiguracionImpresion } from '../db/configuracionImpresion'
 import {
   construirReporteCorte,
+  construirReporteCorteSerie,
   construirTicketCobro,
   construirTicketEntrada,
-  construirTicketPensionado,
-  DatosReporteCorteEscpos
+  construirTicketPensionado
 } from './escpos'
 import { enviarCrudo } from './escposUsb'
 import { enviarCrudoWindows } from './escposWindows'
@@ -72,9 +72,9 @@ async function abrirVentanaConHtml(html: string, tipo: TipoImpresion): Promise<B
  * localmente (src/main/escposWindows.ts), porque ahí Zadig/WinUSB no logra
  * reemplazar el driver en dispositivos clase USB "Printer". `datosTicket`/
  * `datosReporte` traen los datos estructurados que ese camino necesita; si
- * el modo crudo está apagado, o es un reporte sin `datosReporte` (todavía
- * no todos los reportes lo mandan, ver CorteCaja.tsx), se ignora y se usa
- * `html` como siempre.
+ * el modo crudo está apagado, o es un reporte sin `datosReporte` (CorteCaja.tsx
+ * ya manda tanto el corte general como el corte por serie; CorteMensual.tsx
+ * todavía no), se ignora y se usa `html` como siempre.
  */
 type DatosTicket =
   | { variante: 'entrada'; claveFolio: string; datos: Parameters<typeof construirTicketEntrada>[0] }
@@ -89,6 +89,23 @@ function construirBufferTicket(datosTicket: DatosTicket): Buffer {
       return construirTicketCobro(datosTicket.datos, datosTicket.claveFolio)
     case 'pensionado':
       return construirTicketPensionado(datosTicket.datos)
+  }
+}
+
+// El corte de caja general no lleva el detalle boleto por boleto (ese ya
+// se manda por correo en PDF/Excel); el corte "por serie" sí, porque ese
+// reporte es justo la lista física para conciliar una serie en particular
+// (ver construirReporteCorteSerie en src/main/escpos.ts).
+type DatosReporte =
+  | { variante: 'general'; datos: Parameters<typeof construirReporteCorte>[0] }
+  | { variante: 'serie'; claveFolio: string; datos: Parameters<typeof construirReporteCorteSerie>[0] }
+
+function construirBufferReporte(datosReporte: DatosReporte): Buffer {
+  switch (datosReporte.variante) {
+    case 'general':
+      return construirReporteCorte(datosReporte.datos)
+    case 'serie':
+      return construirReporteCorteSerie(datosReporte.datos, datosReporte.claveFolio)
   }
 }
 
@@ -114,7 +131,7 @@ export function registrarImpresion(): void {
     'impresion:imprimir',
     async (
       _evento,
-      params: { html: string; tipo: TipoImpresion; datosTicket?: DatosTicket; datosReporte?: DatosReporteCorteEscpos }
+      params: { html: string; tipo: TipoImpresion; datosTicket?: DatosTicket; datosReporte?: DatosReporte }
     ) => {
       const estacionamiento = obtenerEstacionamientoActual(obtenerDb())
       const config = obtenerConfiguracionImpresion(obtenerDb(), estacionamiento.id)
@@ -124,7 +141,7 @@ export function registrarImpresion(): void {
         return
       }
       if (config?.ticketModoCrudo && params.tipo === 'reporte' && params.datosReporte) {
-        await enviarBufferModoCrudo(config, construirReporteCorte(params.datosReporte))
+        await enviarBufferModoCrudo(config, construirBufferReporte(params.datosReporte))
         return
       }
 

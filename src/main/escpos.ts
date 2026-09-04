@@ -90,11 +90,16 @@ function barcode(valor: string): Buffer {
  * Avanza el papel y corta (comando "feed and full cut" de ESC/POS: GS V 66 n).
  * El cortador queda varios mm abajo del cabezal de impresión — cortar sin
  * avanzar antes (como se hacía con GS V 0 + un par de saltos de línea)
- * corta encima o demasiado cerca de la última línea impresa. n=6 avanza
- * ~6 líneas antes de cortar, suficiente margen para no comerse texto.
+ * corta encima o demasiado cerca de la última línea impresa.
+ *
+ * OJO: "n" NO son líneas de texto — son "unidades de movimiento vertical"
+ * de la impresora (un paso del motor, normalmente una fracción de mm), así
+ * que hace falta un valor bastante más alto de lo que parece a simple
+ * vista para que se note como margen real. n=6 (probado en hardware real)
+ * dejaba un margen casi imperceptible antes del corte.
  */
-function cortar(lineasAvance = 6): Buffer {
-  return Buffer.from([GS, 0x56, 66, lineasAvance])
+function cortar(avance = 50): Buffer {
+  return Buffer.from([GS, 0x56, 66, avance])
 }
 
 export interface DatosBoletoImprimibleEscpos {

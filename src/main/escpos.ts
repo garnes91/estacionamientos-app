@@ -86,9 +86,15 @@ function barcode(valor: string): Buffer {
   ])
 }
 
-/** Corte de papel (si la impresora no tiene cortador, la mayoría simplemente lo ignora). */
-function cortar(): Buffer {
-  return Buffer.from([GS, 0x56, 0x00])
+/**
+ * Avanza el papel y corta (comando "feed and full cut" de ESC/POS: GS V 66 n).
+ * El cortador queda varios mm abajo del cabezal de impresión — cortar sin
+ * avanzar antes (como se hacía con GS V 0 + un par de saltos de línea)
+ * corta encima o demasiado cerca de la última línea impresa. n=6 avanza
+ * ~6 líneas antes de cortar, suficiente margen para no comerse texto.
+ */
+function cortar(lineasAvance = 6): Buffer {
+  return Buffer.from([GS, 0x56, 66, lineasAvance])
 }
 
 export interface DatosBoletoImprimibleEscpos {
@@ -126,8 +132,6 @@ export function construirTicketEntrada(datos: DatosBoletoImprimibleEscpos, clave
   partes.push(barcode(textoFolio))
   partes.push(linea())
   partes.push(texto('Marcar daños visibles al ingresar:', { centrado: true }))
-  partes.push(saltoLinea())
-  partes.push(saltoLinea())
   partes.push(cortar())
 
   return Buffer.concat(partes)
@@ -179,7 +183,6 @@ export function construirTicketCobro(datos: DatosReciboCobroEscpos, claveFolio: 
   partes.push(barcode(textoFolio))
   partes.push(linea())
   partes.push(texto(`Total: $${datos.monto.toFixed(2)}`, { negrita: true }))
-  partes.push(saltoLinea())
   partes.push(cortar())
 
   return Buffer.concat(partes)
@@ -230,7 +233,6 @@ export function construirTicketPensionado(datos: DatosTicketPensionadoEscpos): B
   partes.push(linea())
   partes.push(saltoLinea())
   partes.push(texto('Firma: ________________________'))
-  partes.push(saltoLinea())
   partes.push(cortar())
 
   return Buffer.concat(partes)

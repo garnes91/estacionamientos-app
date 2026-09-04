@@ -56,8 +56,9 @@ describe('construirTicketEntrada', () => {
     expect(buffer.indexOf(iconv.encode('Vehículo: Auto', 'cp850'))).toBeGreaterThanOrEqual(0)
     expect(buffer.indexOf(iconv.encode('Placa: ABC-123', 'cp850'))).toBeGreaterThanOrEqual(0)
 
-    const corte = Buffer.from([0x1d, 0x56, 0x00])
-    expect(buffer.subarray(buffer.length - 3)).toEqual(corte)
+    // GS V 66 n — avanza el papel y corta (más confiable que cortar sin avanzar).
+    const corte = Buffer.from([0x1d, 0x56, 66, 6])
+    expect(buffer.subarray(buffer.length - 4)).toEqual(corte)
   })
 
   it('sin placa, no imprime la línea de placa', () => {

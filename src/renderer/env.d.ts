@@ -371,6 +371,25 @@ declare global {
                 totalMonto: number
               }
             }
+          | {
+              variante: 'mensual'
+              datos: {
+                estacionamientoNombre: string
+                anio: number
+                mes: number
+                totalBoletos: number
+                totalMonto: number
+                pensionadosPagosCantidad: number
+                pensionadosPagosMonto: number
+                altasPensionados: string[]
+                bajasPensionados: string[]
+                gastosEfectivoCantidad: number
+                gastosEfectivoMonto: number
+                gastosPorCategoria: { categoria: string; cantidad: number; monto: number }[]
+                totalEnCaja: number
+                cortesDelMes: { hasta: string; totalBoletos: number; totalMonto: number }[]
+              }
+            }
       }) => Promise<void>
       emitirBoleto: (params: {
         estacionamientoId: number

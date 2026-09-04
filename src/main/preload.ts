@@ -80,7 +80,7 @@ contextBridge.exposeInMainWorld('api', {
     // se usan en modo crudo (ver src/main/escpos.ts). CorteCaja.tsx manda
     // tanto el corte general (resumen, sin detalle por boleto — ese ya se
     // manda por correo en PDF/Excel) como el corte por serie (sí con
-    // detalle, es su propósito). CorteMensual.tsx todavía no manda esto.
+    // detalle, es su propósito); CorteMensual.tsx manda el resumen del mes.
     datosReporte?:
       | {
           variante: 'general'
@@ -122,6 +122,25 @@ contextBridge.exposeInMainWorld('api', {
             }[]
             totalBoletos: number
             totalMonto: number
+          }
+        }
+      | {
+          variante: 'mensual'
+          datos: {
+            estacionamientoNombre: string
+            anio: number
+            mes: number
+            totalBoletos: number
+            totalMonto: number
+            pensionadosPagosCantidad: number
+            pensionadosPagosMonto: number
+            altasPensionados: string[]
+            bajasPensionados: string[]
+            gastosEfectivoCantidad: number
+            gastosEfectivoMonto: number
+            gastosPorCategoria: { categoria: string; cantidad: number; monto: number }[]
+            totalEnCaja: number
+            cortesDelMes: { hasta: string; totalBoletos: number; totalMonto: number }[]
           }
         }
   }) => ipcRenderer.invoke('impresion:imprimir', params),

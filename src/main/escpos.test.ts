@@ -3,6 +3,7 @@ import iconv from 'iconv-lite'
 import { formatearFolio } from '../logic/folioBarcode'
 import {
   construirReporteCorte,
+  construirReporteCorteMensual,
   construirReporteCorteSerie,
   construirTicketCobro,
   construirTicketEntrada,
@@ -280,6 +281,71 @@ describe('construirReporteCorteSerie', () => {
 
   it('no usa el guion largo "—" en ningún texto', () => {
     const buffer = construirReporteCorteSerie(datosBase, CLAVE_FOLIO)
+    expect(buffer.includes(Buffer.from([0x3f]))).toBe(false)
+  })
+})
+
+describe('construirReporteCorteMensual', () => {
+  const datosBase = {
+    estacionamientoNombre: 'Estación Central',
+    anio: 2026,
+    mes: 9,
+    totalBoletos: 300,
+    totalMonto: 12000,
+    pensionadosPagosCantidad: 0,
+    pensionadosPagosMonto: 0,
+    altasPensionados: [] as string[],
+    bajasPensionados: [] as string[],
+    gastosEfectivoCantidad: 0,
+    gastosEfectivoMonto: 0,
+    gastosPorCategoria: [] as { categoria: string; cantidad: number; monto: number }[],
+    totalEnCaja: 12000,
+    cortesDelMes: [] as { hasta: string; totalBoletos: number; totalMonto: number }[]
+  }
+
+  it('incluye el nombre del mes/año y los totales', () => {
+    const buffer = construirReporteCorteMensual(datosBase)
+    expect(buffer.indexOf(iconv.encode('Corte mensual - Septiembre 2026', 'cp850'))).toBeGreaterThanOrEqual(0)
+    expect(buffer.indexOf(iconv.encode('Boletos: 300 - $12000.00', 'cp850'))).toBeGreaterThanOrEqual(0)
+    expect(buffer.indexOf(iconv.encode('TOTAL EN CAJA DEL MES: $12000.00', 'cp850'))).toBeGreaterThanOrEqual(0)
+  })
+
+  it('incluye gastos por categoría y los cortes de turno del mes', () => {
+    const buffer = construirReporteCorteMensual({
+      ...datosBase,
+      gastosPorCategoria: [{ categoria: 'Papelería', cantidad: 2, monto: 150 }],
+      gastosEfectivoCantidad: 1,
+      gastosEfectivoMonto: 100,
+      cortesDelMes: [{ hasta: '2026-09-01T23:59:59.000Z', totalBoletos: 10, totalMonto: 400 }]
+    })
+    expect(buffer.indexOf(iconv.encode('Papelería: 2 - $150.00', 'cp850'))).toBeGreaterThanOrEqual(0)
+    expect(buffer.indexOf(iconv.encode('(Efectivo: 1 - $100.00)', 'cp850'))).toBeGreaterThanOrEqual(0)
+    expect(buffer.indexOf(iconv.encode('10 bol.  $400.00', 'cp850'))).toBeGreaterThanOrEqual(0)
+  })
+
+  it('sin pensionados ni gastos ni cortes en el mes, no imprime esas secciones', () => {
+    const buffer = construirReporteCorteMensual(datosBase)
+    expect(buffer.indexOf(iconv.encode('Pensionados:', 'cp850'))).toBe(-1)
+    expect(buffer.indexOf(iconv.encode('Gastos por categoria:', 'cp850'))).toBe(-1)
+    expect(buffer.indexOf(iconv.encode('Cortes de turno del mes:', 'cp850'))).toBe(-1)
+  })
+
+  it('termina con el comando de corte', () => {
+    const buffer = construirReporteCorteMensual(datosBase)
+    const corte = Buffer.from([0x1d, 0x56, 66, 50])
+    expect(buffer.subarray(buffer.length - 4)).toEqual(corte)
+  })
+
+  it('no usa el guion largo "—" en ningún texto', () => {
+    const buffer = construirReporteCorteMensual({
+      ...datosBase,
+      altasPensionados: ['Ana'],
+      bajasPensionados: ['Luis'],
+      pensionadosPagosCantidad: 2,
+      pensionadosPagosMonto: 1000,
+      gastosPorCategoria: [{ categoria: 'Papelería', cantidad: 2, monto: 150 }],
+      cortesDelMes: [{ hasta: '2026-09-01T23:59:59.000Z', totalBoletos: 10, totalMonto: 400 }]
+    })
     expect(buffer.includes(Buffer.from([0x3f]))).toBe(false)
   })
 })

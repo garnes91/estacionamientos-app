@@ -4,6 +4,7 @@ import { obtenerEstacionamientoActual } from '../db/estacionamientos'
 import { obtenerConfiguracionImpresion } from '../db/configuracionImpresion'
 import {
   construirReporteCorte,
+  construirReporteCorteMensual,
   construirReporteCorteSerie,
   construirTicketCobro,
   construirTicketEntrada,
@@ -72,9 +73,8 @@ async function abrirVentanaConHtml(html: string, tipo: TipoImpresion): Promise<B
  * localmente (src/main/escposWindows.ts), porque ahí Zadig/WinUSB no logra
  * reemplazar el driver en dispositivos clase USB "Printer". `datosTicket`/
  * `datosReporte` traen los datos estructurados que ese camino necesita; si
- * el modo crudo está apagado, o es un reporte sin `datosReporte` (CorteCaja.tsx
- * ya manda tanto el corte general como el corte por serie; CorteMensual.tsx
- * todavía no), se ignora y se usa `html` como siempre.
+ * el modo crudo está apagado, o es un reporte sin `datosReporte`, se ignora
+ * y se usa `html` como siempre.
  */
 type DatosTicket =
   | { variante: 'entrada'; claveFolio: string; datos: Parameters<typeof construirTicketEntrada>[0] }
@@ -99,6 +99,7 @@ function construirBufferTicket(datosTicket: DatosTicket): Buffer {
 type DatosReporte =
   | { variante: 'general'; datos: Parameters<typeof construirReporteCorte>[0] }
   | { variante: 'serie'; claveFolio: string; datos: Parameters<typeof construirReporteCorteSerie>[0] }
+  | { variante: 'mensual'; datos: Parameters<typeof construirReporteCorteMensual>[0] }
 
 function construirBufferReporte(datosReporte: DatosReporte): Buffer {
   switch (datosReporte.variante) {
@@ -106,6 +107,8 @@ function construirBufferReporte(datosReporte: DatosReporte): Buffer {
       return construirReporteCorte(datosReporte.datos)
     case 'serie':
       return construirReporteCorteSerie(datosReporte.datos, datosReporte.claveFolio)
+    case 'mensual':
+      return construirReporteCorteMensual(datosReporte.datos)
   }
 }
 

@@ -423,3 +423,91 @@ export function construirReporteCorteSerie(datos: DatosReporteCorteSerieEscpos, 
 
   return Buffer.concat(partes)
 }
+
+const MESES = [
+  'Enero',
+  'Febrero',
+  'Marzo',
+  'Abril',
+  'Mayo',
+  'Junio',
+  'Julio',
+  'Agosto',
+  'Septiembre',
+  'Octubre',
+  'Noviembre',
+  'Diciembre'
+]
+
+export interface DatosReporteCorteMensualEscpos {
+  estacionamientoNombre: string
+  anio: number
+  mes: number
+  totalBoletos: number
+  totalMonto: number
+  pensionadosPagosCantidad: number
+  pensionadosPagosMonto: number
+  altasPensionados: string[]
+  bajasPensionados: string[]
+  gastosEfectivoCantidad: number
+  gastosEfectivoMonto: number
+  gastosPorCategoria: { categoria: string; cantidad: number; monto: number }[]
+  totalEnCaja: number
+  cortesDelMes: { hasta: string; totalBoletos: number; totalMonto: number }[]
+}
+
+/**
+ * Igual que construirReporteCorte (resumen, sin detalle por boleto — ese
+ * ya se manda por correo en PDF/Excel), pero con los totales del mes
+ * completo y la lista de cortes de turno como referencia (ver
+ * CorteMensual.tsx).
+ */
+export function construirReporteCorteMensual(datos: DatosReporteCorteMensualEscpos): Buffer {
+  const partes: Buffer[] = [iniciar(), texto(datos.estacionamientoNombre, { centrado: true, negrita: true })]
+
+  partes.push(texto(`Corte mensual - ${MESES[datos.mes - 1]} ${datos.anio}`, { centrado: true }))
+  partes.push(linea())
+  partes.push(texto(`Boletos: ${datos.totalBoletos} - $${datos.totalMonto.toFixed(2)}`, { negrita: true }))
+
+  if (datos.altasPensionados.length > 0 || datos.bajasPensionados.length > 0 || datos.pensionadosPagosMonto > 0) {
+    partes.push(linea())
+    partes.push(texto('Pensionados:', { negrita: true }))
+    if (datos.altasPensionados.length > 0) {
+      partes.push(texto(`Altas (${datos.altasPensionados.length}): ${datos.altasPensionados.join(', ')}`))
+    }
+    if (datos.bajasPensionados.length > 0) {
+      partes.push(texto(`Bajas (${datos.bajasPensionados.length}): ${datos.bajasPensionados.join(', ')}`))
+    }
+    if (datos.pensionadosPagosMonto > 0) {
+      partes.push(texto(`Pagos: ${datos.pensionadosPagosCantidad} - $${datos.pensionadosPagosMonto.toFixed(2)}`))
+    }
+  }
+
+  if (datos.gastosPorCategoria.length > 0) {
+    partes.push(linea())
+    partes.push(texto('Gastos por categoria:', { negrita: true }))
+    for (const g of datos.gastosPorCategoria) {
+      partes.push(texto(`${g.categoria}: ${g.cantidad} - $${g.monto.toFixed(2)}`))
+    }
+    if (datos.gastosEfectivoMonto > 0) {
+      partes.push(texto(`(Efectivo: ${datos.gastosEfectivoCantidad} - $${datos.gastosEfectivoMonto.toFixed(2)})`))
+    }
+  }
+
+  partes.push(linea())
+  partes.push(texto(`TOTAL EN CAJA DEL MES: $${datos.totalEnCaja.toFixed(2)}`, { centrado: true, negrita: true }))
+
+  if (datos.cortesDelMes.length > 0) {
+    partes.push(linea())
+    partes.push(texto('Cortes de turno del mes:', { negrita: true }))
+    for (const c of datos.cortesDelMes) {
+      const fecha = new Date(c.hasta).toLocaleString('es-MX', FORMATO_FECHA_CORTA)
+      partes.push(texto(`${fecha}  ${c.totalBoletos} bol.  $${c.totalMonto.toFixed(2)}`))
+    }
+  }
+
+  partes.push(saltoLinea())
+  partes.push(cortar())
+
+  return Buffer.concat(partes)
+}

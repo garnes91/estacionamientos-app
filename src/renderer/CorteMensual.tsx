@@ -89,9 +89,35 @@ export function CorteMensual({ onVolver }: { onVolver: () => void }): ReactEleme
 
   async function imprimir(): Promise<void> {
     const elemento = document.getElementById('corte-mensual-imprimible')
-    if (!elemento) return
+    if (!elemento || !datos) return
     try {
-      await window.api.imprimir({ html: elemento.outerHTML, tipo: 'reporte' })
+      await window.api.imprimir({
+        html: elemento.outerHTML,
+        tipo: 'reporte',
+        datosReporte: {
+          variante: 'mensual',
+          datos: {
+            estacionamientoNombre: nombreEstacionamiento,
+            anio: datos.anio,
+            mes: datos.mes,
+            totalBoletos: datos.totalBoletos,
+            totalMonto: datos.totalMonto,
+            pensionadosPagosCantidad: datos.pensionadosPagosCantidad,
+            pensionadosPagosMonto: datos.pensionadosPagosMonto,
+            altasPensionados: datos.altasPensionados.map((a) => a.nombre),
+            bajasPensionados: datos.bajasPensionados.map((b) => b.nombre),
+            gastosEfectivoCantidad: datos.gastosEfectivoCantidad,
+            gastosEfectivoMonto: datos.gastosEfectivoMonto,
+            gastosPorCategoria: datos.gastosPorCategoria,
+            totalEnCaja: datos.totalEnCaja,
+            cortesDelMes: datos.cortesDelMes.map((c) => ({
+              hasta: c.hasta,
+              totalBoletos: c.totalBoletos,
+              totalMonto: c.totalMonto
+            }))
+          }
+        }
+      })
     } catch (e) {
       setError(String(e))
     }

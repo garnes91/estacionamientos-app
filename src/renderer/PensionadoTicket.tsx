@@ -33,7 +33,7 @@ const TITULOS: Record<TipoTicketPensionado, string> = {
  */
 export function PensionadoTicket({ datos }: { datos: DatosTicketPensionado }): ReactElement {
   return (
-    <div id="pensionado-ticket" style={{ width: '76mm', fontFamily: 'monospace', fontSize: 12, lineHeight: 1.4 }}>
+    <div id="pensionado-ticket" style={{ width: '72mm', fontFamily: 'monospace', fontSize: 12, lineHeight: 1.4 }}>
       <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 14 }}>{datos.estacionamientoNombre}</div>
       <hr />
       <div style={{ textAlign: 'center' }}>{TITULOS[datos.tipo]}</div>

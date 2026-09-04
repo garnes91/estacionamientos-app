@@ -61,7 +61,7 @@ export function BoletoImprimible({
   }, [textoFolio])
 
   return (
-    <div id="boleto-imprimible" style={{ width: '76mm', fontFamily: 'monospace', fontSize: 12, lineHeight: 1.4 }}>
+    <div id="boleto-imprimible" style={{ width: '72mm', fontFamily: 'monospace', fontSize: 12, lineHeight: 1.4 }}>
       <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: 14 }}>{datos.estacionamientoNombre}</div>
       {datos.textoBoleto && (
         <div style={{ textAlign: 'center', whiteSpace: 'pre-line', margin: '0.25rem 0' }}>{datos.textoBoleto}</div>

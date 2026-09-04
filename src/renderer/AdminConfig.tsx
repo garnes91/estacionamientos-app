@@ -1244,6 +1244,7 @@ interface ConfiguracionImpresion {
   ticketModoCrudo: boolean
   ticketUsbVendorId: number | null
   ticketUsbProductId: number | null
+  ticketImpresoraCompartida: string | null
 }
 
 const IMPRESION_VACIA: ConfiguracionImpresion = {
@@ -1251,7 +1252,8 @@ const IMPRESION_VACIA: ConfiguracionImpresion = {
   impresoraReporte: null,
   ticketModoCrudo: false,
   ticketUsbVendorId: null,
-  ticketUsbProductId: null
+  ticketUsbProductId: null,
+  ticketImpresoraCompartida: null
 }
 
 function TabImpresion({ estacionamientoId, avisar, avisarError }: TabProps): ReactElement {
@@ -1329,10 +1331,9 @@ function TabImpresion({ estacionamientoId, avisar, avisarError }: TabProps): Rea
 
       <h3>Modo crudo (ESC/POS)</h3>
       <p style={{ color: '#666', fontSize: '0.85rem' }}>
-        Para impresoras térmicas cuyo driver gráfico no se puede instalar en Windows (certificado no confiable, etc.)
-        — la app le habla directo al dispositivo USB en vez de usar el sistema de impresión de Windows. Requiere que
-        el dispositivo tenga instalado el driver genérico WinUSB (con Zadig, no el driver del fabricante). Solo
-        aplica a tickets, no a los reportes de corte.
+        Para impresoras térmicas cuyo driver gráfico no se puede instalar (certificado no confiable, etc.) — la app
+        le manda los bytes directo a la impresora en vez de usar el sistema de impresión normal. Solo aplica a
+        tickets, no a los reportes de corte.
       </p>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
         <input
@@ -1346,7 +1347,27 @@ function TabImpresion({ estacionamientoId, avisar, avisarError }: TabProps): Rea
         </label>
       </div>
 
-      {config.ticketModoCrudo && (
+      {config.ticketModoCrudo && window.api.plataforma === 'win32' && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '0.5rem', alignItems: 'center', maxWidth: 480 }}>
+            <label>Impresora compartida</label>
+            <input
+              style={inputStyle}
+              type="text"
+              placeholder="ej. POS80"
+              value={config.ticketImpresoraCompartida ?? ''}
+              onChange={(e) => setConfig({ ...config, ticketImpresoraCompartida: e.target.value || null })}
+            />
+          </div>
+          <p style={{ color: '#999', fontSize: '0.8rem', maxWidth: 480 }}>
+            En Windows: instala la impresora con el driver <strong>"Generic / Text Only"</strong> (incluido en
+            Windows, sin problema de certificado), compártela (Propiedades → Compartir → nombre de recurso, sin
+            espacios) y escribe aquí ese mismo nombre exacto.
+          </p>
+        </>
+      )}
+
+      {config.ticketModoCrudo && window.api.plataforma !== 'win32' && (
         <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '0.5rem', alignItems: 'center', maxWidth: 480 }}>
           <label>Impresora USB</label>
           <select
@@ -1366,7 +1387,7 @@ function TabImpresion({ estacionamientoId, avisar, avisarError }: TabProps): Rea
           </select>
         </div>
       )}
-      {config.ticketModoCrudo && impresorasUsb.length === 0 && (
+      {config.ticketModoCrudo && window.api.plataforma !== 'win32' && impresorasUsb.length === 0 && (
         <p style={{ color: '#999', fontSize: '0.8rem', maxWidth: 480 }}>
           No se detectó ningún dispositivo USB de tipo impresora — revisa que esté conectada y que tenga el driver
           WinUSB instalado.

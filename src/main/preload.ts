@@ -2,6 +2,10 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 contextBridge.exposeInMainWorld('api', {
   version: () => ipcRenderer.invoke('app:version'),
+  // Para decidir en Admin > Impresión qué campo mostrar en modo crudo
+  // (impresora USB en Mac/Linux, impresora compartida en Windows — ver
+  // src/main/print.ts).
+  plataforma: process.platform,
   actualizaciones: {
     estado: () => ipcRenderer.invoke('actualizaciones:estado'),
     instalar: () => ipcRenderer.invoke('actualizaciones:instalar'),
@@ -248,6 +252,7 @@ contextBridge.exposeInMainWorld('api', {
           ticketModoCrudo: boolean
           ticketUsbVendorId: number | null
           ticketUsbProductId: number | null
+          ticketImpresoraCompartida: string | null
         }
       }) => ipcRenderer.invoke('admin:impresion:guardar', params),
       listarImpresoras: () => ipcRenderer.invoke('admin:impresion:listarImpresoras'),

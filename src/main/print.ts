@@ -4,6 +4,7 @@ import { obtenerEstacionamientoActual } from '../db/estacionamientos'
 import { obtenerConfiguracionImpresion } from '../db/configuracionImpresion'
 import { construirTicketCobro, construirTicketEntrada, construirTicketPensionado } from './escpos'
 import { enviarCrudo } from './escposUsb'
+import { enviarCrudoWindows } from './escposWindows'
 
 export type TipoImpresion = 'ticket' | 'reporte'
 
@@ -57,11 +58,14 @@ async function abrirVentanaConHtml(html: string, tipo: TipoImpresion): Promise<B
  *
  * Si la instalación tiene activado el modo crudo (ver
  * src/db/configuracionImpresion.ts), un ticket no pasa por nada de esto:
- * se arma en bytes ESC/POS (ver src/main/escpos.ts) y se manda directo por
- * USB (ver src/main/escposUsb.ts) — para impresoras térmicas cuyo driver
- * gráfico no se puede instalar en Windows. `datosTicket` trae los datos
- * estructurados que ese camino necesita; si el modo crudo está apagado se
- * ignora y se usa `html` como siempre.
+ * se arma en bytes ESC/POS (ver src/main/escpos.ts) — para impresoras
+ * térmicas cuyo driver gráfico no se puede instalar en Windows. En
+ * Mac/Linux se manda directo por USB (src/main/escposUsb.ts); en Windows,
+ * a una impresora compartida localmente con el driver genérico "Generic /
+ * Text Only" (src/main/escposWindows.ts), porque ahí Zadig/WinUSB no logra
+ * reemplazar el driver en dispositivos clase USB "Printer". `datosTicket`
+ * trae los datos estructurados que ese camino necesita; si el modo crudo
+ * está apagado se ignora y se usa `html` como siempre.
  */
 type DatosTicket =
   | { variante: 'entrada'; claveFolio: string; datos: Parameters<typeof construirTicketEntrada>[0] }
@@ -87,11 +91,20 @@ export function registrarImpresion(): void {
       const config = obtenerConfiguracionImpresion(obtenerDb(), estacionamiento.id)
 
       if (params.tipo === 'ticket' && config?.ticketModoCrudo && params.datosTicket) {
-        if (config.ticketUsbVendorId == null || config.ticketUsbProductId == null) {
-          throw new Error('Modo crudo activado pero no hay impresora USB elegida en Admin > Impresión.')
-        }
         const buffer = construirBufferTicket(params.datosTicket)
-        await enviarCrudo(config.ticketUsbVendorId, config.ticketUsbProductId, buffer)
+        if (process.platform === 'win32') {
+          if (!config.ticketImpresoraCompartida) {
+            throw new Error(
+              'Modo crudo activado pero no hay nombre de impresora compartida configurado en Admin > Impresión.'
+            )
+          }
+          await enviarCrudoWindows(config.ticketImpresoraCompartida, buffer)
+        } else {
+          if (config.ticketUsbVendorId == null || config.ticketUsbProductId == null) {
+            throw new Error('Modo crudo activado pero no hay impresora USB elegida en Admin > Impresión.')
+          }
+          await enviarCrudo(config.ticketUsbVendorId, config.ticketUsbProductId, buffer)
+        }
         return
       }
 

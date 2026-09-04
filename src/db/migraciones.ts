@@ -27,6 +27,12 @@ export function migrarColumnasFaltantes(db: DB): void {
   )
   agregarColumnaSiFalta(db, 'configuracion_impresion', 'ticket_usb_vendor_id', 'ticket_usb_vendor_id INTEGER')
   agregarColumnaSiFalta(db, 'configuracion_impresion', 'ticket_usb_product_id', 'ticket_usb_product_id INTEGER')
+  agregarColumnaSiFalta(
+    db,
+    'configuracion_impresion',
+    'ticket_impresora_compartida',
+    'ticket_impresora_compartida TEXT'
+  )
 }
 
 function tablaExiste(db: DB, tabla: string): boolean {

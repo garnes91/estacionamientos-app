@@ -298,12 +298,17 @@ CREATE TABLE IF NOT EXISTS configuracion_impresion (
   estacionamiento_id  INTEGER NOT NULL REFERENCES estacionamientos(id),
   impresora_ticket    TEXT,
   impresora_reporte   TEXT,
-  -- Modo crudo (ESC/POS directo por USB, ver src/main/escpos.ts y
-  -- src/main/escposUsb.ts) — para impresoras térmicas cuyo driver gráfico
-  -- no se puede instalar en Windows. Opcional, apagado por default.
-  ticket_modo_crudo     INTEGER NOT NULL DEFAULT 0 CHECK (ticket_modo_crudo IN (0, 1)),
-  ticket_usb_vendor_id  INTEGER,
-  ticket_usb_product_id INTEGER,
+  -- Modo crudo (ESC/POS directo, ver src/main/escpos.ts) — para impresoras
+  -- térmicas cuyo driver gráfico no se puede instalar en Windows. Opcional,
+  -- apagado por default. Mac/Linux usan USB directo (ticket_usb_vendor_id/
+  -- ticket_usb_product_id, ver src/main/escposUsb.ts); Windows usa una
+  -- impresora compartida localmente (ticket_impresora_compartida, ver
+  -- src/main/escposWindows.ts) porque Zadig/WinUSB no logra reemplazar el
+  -- driver en impresoras clase USB "Printer" ahí.
+  ticket_modo_crudo           INTEGER NOT NULL DEFAULT 0 CHECK (ticket_modo_crudo IN (0, 1)),
+  ticket_usb_vendor_id        INTEGER,
+  ticket_usb_product_id       INTEGER,
+  ticket_impresora_compartida TEXT,
   UNIQUE (estacionamiento_id)
 );
 

@@ -231,6 +231,7 @@ interface ConfiguracionImpresionApi {
   ticketModoCrudo: boolean
   ticketUsbVendorId: number | null
   ticketUsbProductId: number | null
+  ticketImpresoraCompartida: string | null
 }
 
 interface ImpresoraUsbApi {
@@ -258,6 +259,7 @@ declare global {
   interface Window {
     api: {
       version: () => Promise<string>
+      plataforma: NodeJS.Platform
       actualizaciones: {
         estado: () => Promise<string | null>
         instalar: () => Promise<void>

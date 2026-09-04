@@ -479,14 +479,9 @@ export function OperacionBoletos({
           Último boleto
         </div>
         {ultimoEmitido ? (
-          <>
-            <div style={{ border: '1px solid #e2e0da', borderRadius: 8, padding: '1rem', boxSizing: 'border-box' }}>
-              <BoletoImprimible datos={ultimoEmitido} claveFolio={claveFolio} />
-            </div>
-            <button onClick={imprimir} style={{ marginTop: '0.75rem', width: '100%', padding: '0.5rem', boxSizing: 'border-box' }}>
-              Reimprimir último boleto
-            </button>
-          </>
+          <div style={{ border: '1px solid #e2e0da', borderRadius: 8, padding: '1rem', boxSizing: 'border-box' }}>
+            <BoletoImprimible datos={ultimoEmitido} claveFolio={claveFolio} />
+          </div>
         ) : (
           <div
             style={{
@@ -515,14 +510,9 @@ export function OperacionBoletos({
           Último cobro
         </div>
         {ultimoCobro ? (
-          <>
-            <div style={{ border: '1px solid #e2e0da', borderRadius: 8, padding: '1rem', boxSizing: 'border-box' }}>
-              <ReciboCobro datos={ultimoCobro} claveFolio={claveFolio} />
-            </div>
-            <button onClick={imprimirRecibo} style={{ marginTop: '0.75rem', width: '100%', padding: '0.5rem', boxSizing: 'border-box' }}>
-              Reimprimir recibo
-            </button>
-          </>
+          <div style={{ border: '1px solid #e2e0da', borderRadius: 8, padding: '1rem', boxSizing: 'border-box' }}>
+            <ReciboCobro datos={ultimoCobro} claveFolio={claveFolio} />
+          </div>
         ) : (
           <div
             style={{

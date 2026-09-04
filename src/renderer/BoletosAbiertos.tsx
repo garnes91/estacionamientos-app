@@ -155,14 +155,9 @@ export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactEl
           Último cobro
         </div>
         {ultimoCobro ? (
-          <>
-            <div style={{ border: '1px solid #e2e0da', borderRadius: 8, padding: '1rem', boxSizing: 'border-box' }}>
-              <ReciboCobro datos={ultimoCobro} claveFolio={claveFolio} />
-            </div>
-            <button onClick={imprimirRecibo} style={{ marginTop: '0.75rem', width: '100%', padding: '0.5rem', boxSizing: 'border-box' }}>
-              Reimprimir recibo
-            </button>
-          </>
+          <div style={{ border: '1px solid #e2e0da', borderRadius: 8, padding: '1rem', boxSizing: 'border-box' }}>
+            <ReciboCobro datos={ultimoCobro} claveFolio={claveFolio} />
+          </div>
         ) : (
           <div
             style={{

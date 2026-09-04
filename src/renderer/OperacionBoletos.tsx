@@ -226,6 +226,11 @@ export function OperacionBoletos({
       await refrescarResumen(estacionamientoId)
     } catch (e) {
       setError(limpiarError(e))
+      // El folio sí tenía formato válido pero el cobro falló (boleto ya
+      // cobrado, cancelado, etc.) — igual puede haber quedado un carácter
+      // suelto del escaneo en placa; se deshace en vez de dejarlo o de
+      // borrar de más lo que el operador ya tenía escrito.
+      if (deEscaneoGlobal) setPlaca(placaAntesRef.current)
     } finally {
       setCobrandoEscaneo(false)
     }
@@ -277,6 +282,12 @@ export function OperacionBoletos({
   const ultimoTecleoRef = useRef(0)
   const bufferEscaneoRef = useRef('')
   const folioInputRef = useRef<HTMLInputElement>(null)
+  // Valor de "placa" justo antes de que empezara la tecla actual — permite
+  // deshacer lo que se haya alcanzado a escribir ahí por el primer carácter
+  // de un escaneo (ver más abajo) incluso cuando el escaneo NO resulta en
+  // un folio válido (antes solo se limpiaba placa tras un cobro exitoso;
+  // un escaneo fallido/mal leído dejaba el residuo ahí para siempre).
+  const placaAntesRef = useRef('')
 
   useEffect(() => {
     function alTecladoGlobal(e: KeyboardEvent): void {
@@ -297,13 +308,21 @@ export function OperacionBoletos({
         // aquí duplicaría el cobro.
         if (transcurrido < UMBRAL_ESCANEO_MS && document.activeElement !== folioInputRef.current) {
           const parseado = parsearFolio(buffer, claveFolio)
-          if (parseado) cobrarFolio(parseado, true)
+          if (parseado) {
+            cobrarFolio(parseado, true)
+          } else {
+            // No fue un folio válido (lectura parcial, código dañado, etc.)
+            // — cobrarFolio no se ejecuta, así que nadie más va a limpiar el
+            // residuo que dejó el primer carácter del escaneo en "placa".
+            setPlaca(placaAntesRef.current)
+          }
         }
         return
       }
 
       if (e.key.length === 1) {
         const enRafaga = transcurrido < UMBRAL_ESCANEO_MS
+        if (!enRafaga) placaAntesRef.current = placa
         bufferEscaneoRef.current = enRafaga ? bufferEscaneoRef.current + e.key : e.key
         // A partir del 2do carácter de una ráfaga (la 1ra no se puede saber
         // de antemano) se evita que el escaneo se escriba también en el
@@ -315,7 +334,7 @@ export function OperacionBoletos({
     }
     window.addEventListener('keydown', alTecladoGlobal)
     return () => window.removeEventListener('keydown', alTecladoGlobal)
-  }, [estacionamientoId, claveFolio])
+  }, [estacionamientoId, claveFolio, placa])
 
   async function cerrarSesion(): Promise<void> {
     await window.api.logout()

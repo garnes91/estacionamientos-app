@@ -347,7 +347,11 @@ export function cobrarBoletoPorFolio(db: DB, input: CobroPorFolioInput): BoletoC
   if (existente) {
     if (existente.estado === 'cerrado') {
       const intentos = registrarIntentoRecobro(db, existente.id, input.usuarioCobroId)
-      const mensaje = `Este boleto (${input.serie}-${input.folio}) ya fue cobrado antes.`
+      // Sin el folio en el mensaje a propósito: se le muestra al operador
+      // tal cual en pantalla, y no debería delatar qué folio específico ya
+      // se cobró (el detalle completo sigue disponible para revisión en
+      // obtenerDetalleIntentoRecobro / la alerta de recobro sospechoso).
+      const mensaje = 'Este boleto ya fue cobrado anteriormente.'
       const { umbral_recobro_sospechoso: umbral } = db
         .prepare<[number], { umbral_recobro_sospechoso: number }>(
           'SELECT umbral_recobro_sospechoso FROM estacionamientos WHERE id = ?'

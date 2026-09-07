@@ -262,7 +262,7 @@ describe('cobrarBoletoPorFolio', () => {
       expect.unreachable()
     } catch (e) {
       expect(e).not.toBeInstanceOf(RecobroSospechosoError)
-      expect((e as Error).message).toContain('ya fue cobrado antes')
+      expect((e as Error).message).toBe('Este boleto ya fue cobrado anteriormente.')
     }
 
     const { n } = db.prepare('SELECT COUNT(*) AS n FROM intentos_recobro WHERE boleto_id = ?').get(emitido.id) as {
@@ -286,6 +286,10 @@ describe('cobrarBoletoPorFolio', () => {
       expect((e as RecobroSospechosoError).boletoId).toBe(emitido.id)
       expect((e as RecobroSospechosoError).intentos).toBe(2)
       expect((e as RecobroSospechosoError).usuarioId).toBe(usuarioId)
+      // El mensaje que ve el operador no debe delatar el folio.
+      expect((e as Error).message).toBe('Este boleto ya fue cobrado anteriormente.')
+      expect((e as Error).message).not.toContain(emitido.serie)
+      expect((e as Error).message).not.toContain(String(emitido.folio))
     }
   })
 

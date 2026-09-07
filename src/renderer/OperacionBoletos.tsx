@@ -7,12 +7,14 @@ import { ConfirmModal } from './ConfirmModal'
 
 /**
  * Los errores que cruzan IPC llegan envueltos por Electron como
- * `Error invoking remote method '...': Error: <mensaje real>` — se muestra
- * solo la parte que le sirve al operador en caja, no el envoltorio técnico.
+ * `Error invoking remote method '...': NombreDeLaClase: <mensaje real>`
+ * (el nombre de la clase varía — Error, RecobroSospechosoError, etc.) — se
+ * muestra solo la parte que le sirve al operador en caja, no el envoltorio
+ * técnico ni el nombre de la clase.
  */
 function limpiarError(e: unknown): string {
   const texto = e instanceof Error ? e.message : String(e)
-  const match = texto.match(/Error invoking remote method '[^']*':\s*Error:\s*(.+)$/s)
+  const match = texto.match(/Error invoking remote method '[^']*':\s*(?:\w+:\s*)?(.+)$/s)
   return match ? match[1] : texto
 }
 

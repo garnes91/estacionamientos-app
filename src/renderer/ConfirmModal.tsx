@@ -1,6 +1,12 @@
+import { useEffect } from 'react'
 import type { ReactElement } from 'react'
 
-/** Confirmación con botones "Sí"/"No" — window.confirm() no permite personalizar los botones. */
+/**
+ * Confirmación con botones "Sí"/"No" — window.confirm() no permite
+ * personalizar los botones. También responde a las teclas S/N (para
+ * confirmar sin soltar el teclado, ej. al preguntar "¿Imprimir recibo?"
+ * justo después de cobrar un boleto).
+ */
 export function ConfirmModal({
   mensaje,
   onSi,
@@ -10,6 +16,21 @@ export function ConfirmModal({
   onSi: () => void
   onNo: () => void
 }): ReactElement {
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent): void {
+      const tecla = e.key.toLowerCase()
+      if (tecla === 's') {
+        e.preventDefault()
+        onSi()
+      } else if (tecla === 'n') {
+        e.preventDefault()
+        onNo()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onSi, onNo])
+
   return (
     <div
       style={{

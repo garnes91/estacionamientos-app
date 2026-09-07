@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import { formatearFolio } from '../logic/folioBarcode'
+import { ReautenticarCorte } from './ReautenticarCorte'
 
 interface Corte {
   id: number
@@ -164,6 +165,22 @@ export function CorteCaja({
     }
   }
 
+  // Ver el corte del turno en curso (el que se acaba de generar) no pide
+  // nada extra, pero abrir uno de días anteriores desde el historial sí
+  // exige una cuenta de administrador.
+  const [corteIdPendienteVer, setCorteIdPendienteVer] = useState<number | null>(null)
+
+  function pedirVerDetalle(corteId: number): void {
+    setCorteIdPendienteVer(corteId)
+  }
+
+  async function verDetalleAutorizado(): Promise<void> {
+    if (corteIdPendienteVer == null) return
+    const corteId = corteIdPendienteVer
+    setCorteIdPendienteVer(null)
+    await verDetalle(corteId)
+  }
+
   type DatosReporteCrudo = NonNullable<Parameters<typeof window.api.imprimir>[0]['datosReporte']>
 
   function datosReporteGeneral(): DatosReporteCrudo | undefined {
@@ -272,6 +289,18 @@ export function CorteCaja({
     imprimirTodo()
     enviarPorCorreo(true)
   }, [detalleActual])
+
+  if (corteIdPendienteVer != null) {
+    return (
+      <ReautenticarCorte
+        soloAdmin
+        titulo="Confirmar identidad de administrador"
+        mensaje="Ver el corte de otro día requiere una cuenta de administrador — vuelve a introducir usuario y contraseña."
+        onVerificado={verDetalleAutorizado}
+        onCancelar={() => setCorteIdPendienteVer(null)}
+      />
+    )
+  }
 
   return (
     <div style={{ fontFamily: 'sans-serif', padding: '2rem', maxWidth: 700 }}>
@@ -497,7 +526,7 @@ export function CorteCaja({
                   <td>{c.gastosEfectivoMonto > 0 ? `-$${c.gastosEfectivoMonto.toFixed(2)}` : '—'}</td>
                   <td>${totalEnCaja(c).toFixed(2)}</td>
                   <td>
-                    <button onClick={() => verDetalle(c.id)}>Ver</button>
+                    <button onClick={() => pedirVerDetalle(c.id)}>Ver</button>
                   </td>
                 </tr>
               ))}

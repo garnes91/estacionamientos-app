@@ -252,11 +252,24 @@ export function CorteCaja({
   // Al generar un corte nuevo (no al solo verlo en el historial), se
   // imprime y se manda por correo automáticamente — es lo que por ley hay
   // que archivar, y los operadores no deberían tener que acordarse de dar
-  // más clics para eso.
+  // más clics para eso. Imprime el general y, si hay más de una serie
+  // activa, cada serie por separado (A, B, ...) — una tras otra, no en
+  // paralelo, para no mandar dos trabajos a la vez a la misma impresora
+  // (en modo crudo eso puede chocar si la impresora sigue ocupada con el
+  // anterior).
   useEffect(() => {
     if (!detalleActual || !justoGeneradoRef.current) return
     justoGeneradoRef.current = false
-    imprimirElemento('corte-general-imprimible', datosReporteGeneral())
+    const detalle = detalleActual
+    async function imprimirTodo(): Promise<void> {
+      await imprimirElemento('corte-general-imprimible', datosReporteGeneral())
+      if (!soloSerieA) {
+        for (const s of detalle.porSerie) {
+          await imprimirElemento(`corte-serie-${s.serie}-imprimible`, datosReporteSerie(s))
+        }
+      }
+    }
+    imprimirTodo()
     enviarPorCorreo(true)
   }, [detalleActual])
 

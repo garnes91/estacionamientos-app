@@ -270,6 +270,7 @@ declare global {
         nombre: string
         textoBoleto: string | null
         cargoBoletoPerdido: number
+        umbralRecobroSospechoso: number
         claveFolio: string
       }>
       login: (params: { nombreUsuario: string; password: string }) => Promise<UsuarioApi>
@@ -477,6 +478,7 @@ declare global {
           actualizarTextoBoleto: (params: { estacionamientoId: number; texto: string | null }) => Promise<void>
           actualizarNombre: (params: { estacionamientoId: number; nombre: string }) => Promise<void>
           actualizarCargoBoletoPerdido: (params: { estacionamientoId: number; monto: number }) => Promise<void>
+          actualizarUmbralRecobroSospechoso: (params: { estacionamientoId: number; umbral: number }) => Promise<void>
         }
         tarifasPlanas: {
           listar: (estacionamientoId: number) => Promise<TarifaPlanaAdminApi[]>

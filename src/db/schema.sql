@@ -26,6 +26,11 @@ CREATE TABLE IF NOT EXISTS estacionamientos (
   -- Cargo fijo extra que se suma al cobro normal cuando el cliente perdió
   -- su boleto de papel (ver cerrarBoletoPerdido en src/db/boletos.ts).
   cargo_boleto_perdido REAL NOT NULL DEFAULT 0,
+  -- A partir de cuántos reescaneos de un MISMO boleto ya cerrado se avisa
+  -- como recobro sospechoso (ver cobrarBoletoPorFolio en
+  -- src/db/boletos.ts) — un solo reintento suele ser despiste, 2+ es la
+  -- señal por defecto de un boleto reciclado a propósito.
+  umbral_recobro_sospechoso INTEGER NOT NULL DEFAULT 2,
   activo        INTEGER NOT NULL DEFAULT 1 CHECK (activo IN (0, 1)),
   created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );

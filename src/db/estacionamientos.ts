@@ -5,13 +5,15 @@ export interface Estacionamiento {
   nombre: string
   textoBoleto: string | null
   cargoBoletoPerdido: number
+  umbralRecobroSospechoso: number
 }
 
 /** Cada instalación administra un solo estacionamiento: el primero activo. */
 export function obtenerEstacionamientoActual(db: DB): Estacionamiento {
   const fila = db
     .prepare(
-      `SELECT id, nombre, texto_boleto AS textoBoleto, cargo_boleto_perdido AS cargoBoletoPerdido
+      `SELECT id, nombre, texto_boleto AS textoBoleto, cargo_boleto_perdido AS cargoBoletoPerdido,
+              umbral_recobro_sospechoso AS umbralRecobroSospechoso
        FROM estacionamientos WHERE activo = 1 ORDER BY id LIMIT 1`
     )
     .get() as Estacionamiento | undefined
@@ -33,6 +35,14 @@ export function actualizarCargoBoletoPerdido(db: DB, estacionamientoId: number, 
     throw new Error('El cargo por boleto perdido no puede ser negativo')
   }
   db.prepare('UPDATE estacionamientos SET cargo_boleto_perdido = ? WHERE id = ?').run(monto, estacionamientoId)
+}
+
+/** A partir de cuántos reescaneos de un boleto ya cerrado se avisa como recobro sospechoso (ver src/db/boletos.ts). */
+export function actualizarUmbralRecobroSospechoso(db: DB, estacionamientoId: number, umbral: number): void {
+  if (!Number.isInteger(umbral) || umbral < 1) {
+    throw new Error('El umbral de recobro sospechoso debe ser un entero de al menos 1')
+  }
+  db.prepare('UPDATE estacionamientos SET umbral_recobro_sospechoso = ? WHERE id = ?').run(umbral, estacionamientoId)
 }
 
 /**

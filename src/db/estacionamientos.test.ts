@@ -5,6 +5,7 @@ import {
   actualizarCargoBoletoPerdido,
   actualizarNombreEstacionamiento,
   actualizarTextoBoleto,
+  actualizarUmbralRecobroSospechoso,
   obtenerEstacionamientoActual
 } from './estacionamientos'
 
@@ -63,5 +64,25 @@ describe('actualizarCargoBoletoPerdido', () => {
 
   it('rechaza un monto negativo', () => {
     expect(() => actualizarCargoBoletoPerdido(db, estacionamientoId, -10)).toThrow('no puede ser negativo')
+  })
+})
+
+describe('actualizarUmbralRecobroSospechoso', () => {
+  it('empieza en 2 (sin configurar)', () => {
+    expect(obtenerEstacionamientoActual(db).umbralRecobroSospechoso).toBe(2)
+  })
+
+  it('guarda el umbral y se refleja en obtenerEstacionamientoActual', () => {
+    actualizarUmbralRecobroSospechoso(db, estacionamientoId, 1)
+    expect(obtenerEstacionamientoActual(db).umbralRecobroSospechoso).toBe(1)
+  })
+
+  it('rechaza un valor menor a 1', () => {
+    expect(() => actualizarUmbralRecobroSospechoso(db, estacionamientoId, 0)).toThrow('al menos 1')
+    expect(() => actualizarUmbralRecobroSospechoso(db, estacionamientoId, -1)).toThrow('al menos 1')
+  })
+
+  it('rechaza un valor no entero', () => {
+    expect(() => actualizarUmbralRecobroSospechoso(db, estacionamientoId, 1.5)).toThrow('entero')
   })
 })

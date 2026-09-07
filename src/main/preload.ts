@@ -240,7 +240,9 @@ contextBridge.exposeInMainWorld('api', {
       actualizarNombre: (params: { estacionamientoId: number; nombre: string }) =>
         ipcRenderer.invoke('admin:estacionamiento:actualizarNombre', params),
       actualizarCargoBoletoPerdido: (params: { estacionamientoId: number; monto: number }) =>
-        ipcRenderer.invoke('admin:estacionamiento:actualizarCargoBoletoPerdido', params)
+        ipcRenderer.invoke('admin:estacionamiento:actualizarCargoBoletoPerdido', params),
+      actualizarUmbralRecobroSospechoso: (params: { estacionamientoId: number; umbral: number }) =>
+        ipcRenderer.invoke('admin:estacionamiento:actualizarUmbralRecobroSospechoso', params)
     },
     tarifasPlanas: {
       listar: (estacionamientoId: number) => ipcRenderer.invoke('admin:tarifasPlanas:listar', estacionamientoId),

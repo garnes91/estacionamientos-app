@@ -17,6 +17,12 @@ export function migrarColumnasFaltantes(db: DB): void {
   agregarColumnaSiFalta(db, 'cortes', 'gastos_efectivo_cantidad', 'gastos_efectivo_cantidad INTEGER NOT NULL DEFAULT 0')
   agregarColumnaSiFalta(db, 'cortes', 'gastos_efectivo_monto', 'gastos_efectivo_monto REAL NOT NULL DEFAULT 0')
   agregarColumnaSiFalta(db, 'estacionamientos', 'cargo_boleto_perdido', 'cargo_boleto_perdido REAL NOT NULL DEFAULT 0')
+  agregarColumnaSiFalta(
+    db,
+    'estacionamientos',
+    'umbral_recobro_sospechoso',
+    'umbral_recobro_sospechoso INTEGER NOT NULL DEFAULT 2'
+  )
   agregarColumnaSiFalta(db, 'boletos', 'boleto_perdido', "boleto_perdido INTEGER NOT NULL DEFAULT 0 CHECK (boleto_perdido IN (0, 1))")
   agregarColumnaSiFalta(db, 'boletos', 'recargo_boleto_perdido', 'recargo_boleto_perdido REAL')
   agregarColumnaSiFalta(

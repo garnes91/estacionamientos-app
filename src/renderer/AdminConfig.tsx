@@ -742,12 +742,14 @@ function TabTextoBoleto({ estacionamientoId, avisar, avisarError }: TabProps): R
   const [nombre, setNombre] = useState('')
   const [texto, setTexto] = useState('')
   const [cargoBoletoPerdido, setCargoBoletoPerdido] = useState(0)
+  const [umbralRecobroSospechoso, setUmbralRecobroSospechoso] = useState(2)
 
   useEffect(() => {
     window.api.estacionamientoActual().then((e) => {
       setNombre(e.nombre)
       setTexto(e.textoBoleto ?? '')
       setCargoBoletoPerdido(e.cargoBoletoPerdido)
+      setUmbralRecobroSospechoso(e.umbralRecobroSospechoso)
     })
   }, [estacionamientoId])
 
@@ -773,6 +775,18 @@ function TabTextoBoleto({ estacionamientoId, avisar, avisarError }: TabProps): R
     try {
       await window.api.admin.estacionamiento.actualizarCargoBoletoPerdido({ estacionamientoId, monto: cargoBoletoPerdido })
       avisar('Cargo por boleto perdido guardado')
+    } catch (e) {
+      avisarError(e)
+    }
+  }
+
+  async function guardarUmbralRecobroSospechoso(): Promise<void> {
+    try {
+      await window.api.admin.estacionamiento.actualizarUmbralRecobroSospechoso({
+        estacionamientoId,
+        umbral: umbralRecobroSospechoso
+      })
+      avisar('Umbral de recobro sospechoso guardado')
     } catch (e) {
       avisarError(e)
     }
@@ -822,6 +836,26 @@ function TabTextoBoleto({ estacionamientoId, avisar, avisarError }: TabProps): R
           onChange={(e) => setCargoBoletoPerdido(Number(e.target.value))}
         />
         <button onClick={guardarCargoBoletoPerdido} disabled={cargoBoletoPerdido < 0}>
+          Guardar
+        </button>
+      </div>
+
+      <h3>Umbral de recobro sospechoso</h3>
+      <p style={{ color: '#666', fontSize: '0.85rem' }}>
+        A partir de cuántos reescaneos de un mismo boleto YA COBRADO se avisa como recobro sospechoso (correo y/o
+        panel-operador, si están configurados) — señal de que alguien no destruyó el boleto y lo volvió a usar.
+        Con 1, avisa desde el primer reescaneo; el valor de fábrica es 2 (un solo reintento se asume despiste).
+      </p>
+      <div style={{ display: 'flex', gap: '0.5rem', maxWidth: 240 }}>
+        <input
+          style={{ ...inputStyle, flex: 1 }}
+          type="number"
+          min={1}
+          step="1"
+          value={umbralRecobroSospechoso}
+          onChange={(e) => setUmbralRecobroSospechoso(Number(e.target.value))}
+        />
+        <button onClick={guardarUmbralRecobroSospechoso} disabled={!Number.isInteger(umbralRecobroSospechoso) || umbralRecobroSospechoso < 1}>
           Guardar
         </button>
       </div>

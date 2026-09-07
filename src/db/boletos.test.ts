@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { abrirDb, DB } from './index'
 import { sembrarSiVacio } from './seed'
-import { actualizarCargoBoletoPerdido, obtenerEstacionamientoActual } from './estacionamientos'
+import { actualizarCargoBoletoPerdido, actualizarUmbralRecobroSospechoso, obtenerEstacionamientoActual } from './estacionamientos'
 import { obtenerUsuarioPorDefecto } from './usuarios'
 import { listarTiposVehiculo } from './tiposVehiculo'
 import {
@@ -286,6 +286,21 @@ describe('cobrarBoletoPorFolio', () => {
       expect((e as RecobroSospechosoError).boletoId).toBe(emitido.id)
       expect((e as RecobroSospechosoError).intentos).toBe(2)
       expect((e as RecobroSospechosoError).usuarioId).toBe(usuarioId)
+    }
+  })
+
+  it('respeta el umbral configurado en vez del default de 2 (ver actualizarUmbralRecobroSospechoso)', () => {
+    actualizarUmbralRecobroSospechoso(db, estacionamientoId, 1)
+    const emitido = emitirBoleto(db, { estacionamientoId, tipoVehiculoId: tipoAutoId, usuarioEmisionId: usuarioId })
+    cobrarBoletoPorFolio(db, { estacionamientoId, serie: emitido.serie, folio: emitido.folio, usuarioCobroId: usuarioId })
+
+    // Con umbral 1, ya el PRIMER reescaneo es sospechoso (antes hacía falta el segundo).
+    try {
+      cobrarBoletoPorFolio(db, { estacionamientoId, serie: emitido.serie, folio: emitido.folio, usuarioCobroId: usuarioId })
+      expect.unreachable()
+    } catch (e) {
+      expect(e).toBeInstanceOf(RecobroSospechosoError)
+      expect((e as RecobroSospechosoError).intentos).toBe(1)
     }
   })
 

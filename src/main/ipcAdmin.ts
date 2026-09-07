@@ -1,7 +1,12 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import { obtenerDb } from './db'
 import { requerirAdmin } from './auth'
-import { actualizarCargoBoletoPerdido, actualizarNombreEstacionamiento, actualizarTextoBoleto } from '../db/estacionamientos'
+import {
+  actualizarCargoBoletoPerdido,
+  actualizarNombreEstacionamiento,
+  actualizarTextoBoleto,
+  actualizarUmbralRecobroSospechoso
+} from '../db/estacionamientos'
 import {
   actualizarTipoVehiculo,
   crearTipoVehiculo,
@@ -139,6 +144,14 @@ export function registrarIpcAdmin(): void {
     (_evento, params: { estacionamientoId: number; monto: number }) => {
       requerirAdmin()
       actualizarCargoBoletoPerdido(obtenerDb(), params.estacionamientoId, params.monto)
+    }
+  )
+
+  ipcMain.handle(
+    'admin:estacionamiento:actualizarUmbralRecobroSospechoso',
+    (_evento, params: { estacionamientoId: number; umbral: number }) => {
+      requerirAdmin()
+      actualizarUmbralRecobroSospechoso(obtenerDb(), params.estacionamientoId, params.umbral)
     }
   )
 

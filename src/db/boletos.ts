@@ -299,11 +299,13 @@ function buscarBoletoPorFolioCualquierEstado(
 }
 
 /**
- * Se lanza cuando el MISMO boleto ya cerrado se vuelve a escanear 2+ veces
- * — un solo reintento puede ser un despiste, pero 2+ es la señal de un
- * boleto reciclado a propósito (ver avisarRecobroSospechoso en
- * src/main/recobroSospechoso.ts). boletoId/intentos van en propiedades,
- * no en el mensaje, para que quien atrape el error no tenga que parsearlo.
+ * Se lanza cuando el MISMO boleto ya cerrado se vuelve a escanear al menos
+ * `umbral_recobro_sospechoso` veces (configurable por estacionamiento en
+ * Admin, 2 por default: un solo reintento puede ser un despiste, pero 2+
+ * es la señal de un boleto reciclado a propósito — ver
+ * avisarRecobroSospechoso en src/main/recobroSospechoso.ts).
+ * boletoId/intentos van en propiedades, no en el mensaje, para que quien
+ * atrape el error no tenga que parsearlo.
  */
 export class RecobroSospechosoError extends Error {
   boletoId: number
@@ -346,7 +348,12 @@ export function cobrarBoletoPorFolio(db: DB, input: CobroPorFolioInput): BoletoC
     if (existente.estado === 'cerrado') {
       const intentos = registrarIntentoRecobro(db, existente.id, input.usuarioCobroId)
       const mensaje = `Este boleto (${input.serie}-${input.folio}) ya fue cobrado antes.`
-      if (intentos >= 2) {
+      const { umbral_recobro_sospechoso: umbral } = db
+        .prepare<[number], { umbral_recobro_sospechoso: number }>(
+          'SELECT umbral_recobro_sospechoso FROM estacionamientos WHERE id = ?'
+        )
+        .get(input.estacionamientoId)!
+      if (intentos >= umbral) {
         throw new RecobroSospechosoError(mensaje, existente.id, intentos, input.usuarioCobroId)
       }
       throw new Error(mensaje)

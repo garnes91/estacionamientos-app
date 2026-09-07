@@ -1301,7 +1301,14 @@ function TabImpresion({ estacionamientoId, avisar, avisarError }: TabProps): Rea
       if (c) setConfig(c)
     })
     window.api.admin.impresion.listarImpresoras().then(setImpresoras).catch(avisarError)
-    window.api.admin.impresion.listarImpresorasUsb().then(setImpresorasUsb).catch(avisarError)
+    // Solo se usa en Mac/Linux (selector de dispositivo USB) — en Windows
+    // ni se muestra (ahí se usa el nombre del recurso compartido), y
+    // llamarla igual habla por libusb al dispositivo USB, lo que choca con
+    // el driver que ya lo tiene ocupado gestionando la cola de impresión
+    // (usbprint.sys) y tira "getString error" en vez de nada útil.
+    if (window.api.plataforma !== 'win32') {
+      window.api.admin.impresion.listarImpresorasUsb().then(setImpresorasUsb).catch(avisarError)
+    }
   }, [estacionamientoId])
 
   async function guardar(): Promise<void> {

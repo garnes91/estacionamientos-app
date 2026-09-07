@@ -105,9 +105,11 @@ function TablaBoletos({ boletos, claveFolio }: { boletos: DetalleCorteBoleto[]; 
 
 export function CorteCaja({
   nombreUsuario,
+  rol,
   onVolver
 }: {
   nombreUsuario: string
+  rol: 'admin' | 'empleado'
   onVolver: () => void
 }): ReactElement {
   const [estacionamientoId, setEstacionamientoId] = useState<number | null>(null)
@@ -501,7 +503,7 @@ export function CorteCaja({
         </>
       )}
 
-      {!soloSerieA && (
+      {!soloSerieA && rol === 'admin' && (
         <>
           <h2 style={{ marginTop: '2rem' }}>Historial</h2>
           <table cellPadding={6} style={{ borderCollapse: 'collapse', width: '100%' }}>

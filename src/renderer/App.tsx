@@ -78,7 +78,9 @@ function App(): ReactElement {
       <CorteMensual onVolver={volverDeCorteMensual} />
     )
   } else if (pantalla === 'corte') {
-    contenido = <CorteCaja nombreUsuario={usuario.nombreCompleto} onVolver={() => setPantalla('operacion')} />
+    contenido = (
+      <CorteCaja nombreUsuario={usuario.nombreCompleto} rol={usuario.rol} onVolver={() => setPantalla('operacion')} />
+    )
   } else {
     contenido = (
       <OperacionBoletos

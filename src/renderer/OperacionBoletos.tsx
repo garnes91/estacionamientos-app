@@ -290,6 +290,14 @@ export function OperacionBoletos({
   // un folio válido (antes solo se limpiaba placa tras un cobro exitoso;
   // un escaneo fallido/mal leído dejaba el residuo ahí para siempre).
   const placaAntesRef = useRef('')
+  // Qué elemento tenía el foco al llegar el PRIMER carácter de la ráfaga
+  // actual — se fija una sola vez y se usa para toda la ráfaga (en vez de
+  // volver a leer document.activeElement en cada tecla). Sin esto, si el
+  // operador da clic en el campo de folio justo mientras el lector todavía
+  // está mandando caracteres, el foco cambia a medio escaneo: el primer
+  // carácter cae en "placa" (foco viejo) y el resto se escribe en el campo
+  // de folio (foco nuevo) — un mismo escaneo partido en dos destinos.
+  const elementoAlIniciarRef = useRef<Element | null>(null)
 
   useEffect(() => {
     function alTecladoGlobal(e: KeyboardEvent): void {
@@ -305,10 +313,10 @@ export function OperacionBoletos({
       if (e.key === 'Enter') {
         const buffer = bufferEscaneoRef.current
         bufferEscaneoRef.current = ''
-        // Si el foco ya está en el campo de folio escaneado, su propio
-        // onKeyDown (más abajo) ya se encarga de cobrar — hacerlo también
-        // aquí duplicaría el cobro.
-        if (transcurrido < UMBRAL_ESCANEO_MS && document.activeElement !== folioInputRef.current) {
+        // Si el foco ya estaba en el campo de folio escaneado AL EMPEZAR la
+        // ráfaga, su propio onKeyDown (más abajo) ya se encarga de cobrar —
+        // hacerlo también aquí duplicaría el cobro.
+        if (transcurrido < UMBRAL_ESCANEO_MS && elementoAlIniciarRef.current !== folioInputRef.current) {
           const parseado = parsearFolio(buffer, claveFolio)
           if (parseado) {
             cobrarFolio(parseado, true)
@@ -324,12 +332,17 @@ export function OperacionBoletos({
 
       if (e.key.length === 1) {
         const enRafaga = transcurrido < UMBRAL_ESCANEO_MS
-        if (!enRafaga) placaAntesRef.current = placa
+        if (!enRafaga) {
+          placaAntesRef.current = placa
+          elementoAlIniciarRef.current = document.activeElement
+        }
         bufferEscaneoRef.current = enRafaga ? bufferEscaneoRef.current + e.key : e.key
         // A partir del 2do carácter de una ráfaga (la 1ra no se puede saber
         // de antemano) se evita que el escaneo se escriba también en el
-        // campo que tenga el foco en ese momento (ej. la placa).
-        if (enRafaga && document.activeElement !== folioInputRef.current) {
+        // campo que tenga el foco — el que tenía el foco AL EMPEZAR la
+        // ráfaga, no el que tenga el foco en este instante (ver comentario
+        // de elementoAlIniciarRef arriba).
+        if (enRafaga && elementoAlIniciarRef.current !== folioInputRef.current) {
           e.preventDefault()
         }
       }

@@ -15,7 +15,10 @@ type Pantalla = 'operacion' | 'admin' | 'boletosAbiertos' | 'corte' | 'pensionad
 function App(): ReactElement {
   const [usuario, setUsuario] = useState<UsuarioSesion | null | undefined>(undefined)
   const [pantalla, setPantalla] = useState<Pantalla>('operacion')
-  const [corteAutorizado, setCorteAutorizado] = useState(false)
+  // El corte mensual es más sensible que el del día (agrega/expone más
+  // periodo de una vez) — pide reautenticarse con una cuenta de admin
+  // para entrar. El corte del día ya no lo pide (se quitó a propósito).
+  const [corteMensualAutorizado, setCorteMensualAutorizado] = useState(false)
   const [actualizacionLista, setActualizacionLista] = useState<string | null>(null)
 
   useEffect(() => {
@@ -40,12 +43,12 @@ function App(): ReactElement {
   function cerrarSesion(): void {
     setUsuario(null)
     setPantalla('operacion')
-    setCorteAutorizado(false)
+    setCorteMensualAutorizado(false)
   }
 
-  function volverDeCorte(): void {
+  function volverDeCorteMensual(): void {
     setPantalla('operacion')
-    setCorteAutorizado(false)
+    setCorteMensualAutorizado(false)
   }
 
   let contenido: ReactElement
@@ -63,13 +66,19 @@ function App(): ReactElement {
   } else if (pantalla === 'gastos') {
     contenido = <Gastos onVolver={() => setPantalla('operacion')} />
   } else if (pantalla === 'corteMensual') {
-    contenido = <CorteMensual onVolver={() => setPantalla('operacion')} />
-  } else if (pantalla === 'corte') {
-    contenido = !corteAutorizado ? (
-      <ReautenticarCorte onVerificado={() => setCorteAutorizado(true)} onCancelar={() => setPantalla('operacion')} />
+    contenido = !corteMensualAutorizado ? (
+      <ReautenticarCorte
+        soloAdmin
+        titulo="Confirmar identidad de administrador"
+        mensaje="El corte mensual solo lo puede generar/imprimir un administrador — vuelve a introducir usuario y contraseña de una cuenta admin para continuar."
+        onVerificado={() => setCorteMensualAutorizado(true)}
+        onCancelar={() => setPantalla('operacion')}
+      />
     ) : (
-      <CorteCaja nombreUsuario={usuario.nombreCompleto} onVolver={volverDeCorte} />
+      <CorteMensual onVolver={volverDeCorteMensual} />
     )
+  } else if (pantalla === 'corte') {
+    contenido = <CorteCaja nombreUsuario={usuario.nombreCompleto} onVolver={() => setPantalla('operacion')} />
   } else {
     contenido = (
       <OperacionBoletos

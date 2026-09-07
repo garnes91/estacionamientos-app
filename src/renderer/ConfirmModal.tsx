@@ -47,10 +47,10 @@ export function ConfirmModal({
         <p style={{ marginTop: 0 }}>{mensaje}</p>
         <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
           <button onClick={onSi} style={{ padding: '0.4rem 1.5rem' }}>
-            Sí
+            Sí (S)
           </button>
           <button onClick={onNo} style={{ padding: '0.4rem 1.5rem' }}>
-            No
+            No (N)
           </button>
         </div>
       </div>

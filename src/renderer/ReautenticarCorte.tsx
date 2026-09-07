@@ -2,17 +2,25 @@ import { useState } from 'react'
 import type { FormEvent, ReactElement } from 'react'
 
 /**
- * Reconfirma credenciales antes de entrar a Corte de caja, sin tocar la
- * sesión activa del operador (ver auth:verificar en src/main/ipc.ts) — así
- * nadie que se quedó con la ventana abierta puede entrar a ver/generar
- * cortes sin volver a autenticarse.
+ * Reconfirma credenciales antes de entrar a una pantalla sensible, sin
+ * tocar la sesión activa del operador (ver auth:verificar en
+ * src/main/ipc.ts) — así nadie que se quedó con la ventana abierta puede
+ * entrar sin volver a autenticarse. Con `soloAdmin`, además exige que esas
+ * credenciales sean de una cuenta con rol admin (ej. Corte mensual) — no
+ * basta con que sean válidas.
  */
 export function ReautenticarCorte({
   onVerificado,
-  onCancelar
+  onCancelar,
+  soloAdmin = false,
+  titulo = 'Confirmar identidad',
+  mensaje = 'Vuelve a introducir tu usuario y contraseña para continuar.'
 }: {
   onVerificado: () => void
   onCancelar: () => void
+  soloAdmin?: boolean
+  titulo?: string
+  mensaje?: string
 }): ReactElement {
   const [nombreUsuario, setNombreUsuario] = useState('')
   const [password, setPassword] = useState('')
@@ -24,7 +32,11 @@ export function ReautenticarCorte({
     setCargando(true)
     setError(null)
     try {
-      await window.api.verificarCredenciales({ nombreUsuario, password })
+      const usuario = await window.api.verificarCredenciales({ nombreUsuario, password })
+      if (soloAdmin && usuario.rol !== 'admin') {
+        setError('Se necesita una cuenta de administrador para entrar aquí')
+        return
+      }
       onVerificado()
     } catch {
       setError('Usuario o contraseña incorrectos')
@@ -35,8 +47,8 @@ export function ReautenticarCorte({
 
   return (
     <div style={{ fontFamily: 'sans-serif', padding: '2rem', maxWidth: 320 }}>
-      <h1>Confirmar identidad</h1>
-      <p style={{ color: '#666' }}>Vuelve a introducir tu usuario y contraseña para entrar a Corte de caja.</p>
+      <h1>{titulo}</h1>
+      <p style={{ color: '#666' }}>{mensaje}</p>
       <form onSubmit={enviar} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
         <input
           type="text"

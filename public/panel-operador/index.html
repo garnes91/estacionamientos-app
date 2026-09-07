@@ -193,6 +193,7 @@
 
 <nav class="tabs" id="tabs-nav" style="display:none;">
   <button class="tab" data-tab="estado">Estado</button>
+  <button class="tab" data-tab="alertas">Alertas<span id="badge-alertas-tab"></span></button>
   <button class="tab" data-tab="configuracion">Configuración</button>
   <button class="tab" data-tab="facturacion">Facturación global</button>
   <button class="tab" data-tab="administracion" id="tab-administracion" style="display:none;">Administración</button>
@@ -214,6 +215,15 @@
     <div id="tarjetas-estado"></div>
     <p id="vacio-estado" class="hint" style="display:none;">Todavía no ha llegado ningún latido — abre la app de un
       estacionamiento con el monitoreo habilitado y espera un minuto.</p>
+  </div>
+
+  <!-- ================= Alertas (recobro sospechoso, todos los estacionamientos) ================= -->
+  <div id="vista-alertas" class="vista">
+    <h2 style="margin-top:0;">Boletos reciclados</h2>
+    <p class="hint">Un boleto ya cobrado que se vuelve a escanear 2 o más veces — junta las alertas de todos tus
+      estacionamientos en un solo lugar, sin tener que entrar tarjeta por tarjeta.</p>
+    <div id="lista-alertas"></div>
+    <p id="vacio-alertas" class="hint" style="display:none;">Sin alertas pendientes en ningún estacionamiento.</p>
   </div>
 
   <!-- ================= Configuración ================= -->
@@ -473,6 +483,7 @@
         )
         if (ultimoSnapshotEstado) renderizarTarjetasEstado(ultimoSnapshotEstado)
         if (alertaAbiertaSlug === slug) renderizarModalAlertas()
+        renderizarVistaAlertas()
       })
     )
   }
@@ -482,6 +493,57 @@
     desuscribirAlertas.clear()
     alertasPorSlug.clear()
     alertaAbiertaSlug = null
+    renderizarVistaAlertas()
+  }
+
+  // ---- Vista "Alertas": junta las alertas de TODOS los estacionamientos
+  // (alertasPorSlug ya las trae todas — cada tarjeta de Estado ya se
+  // suscribe a su propia subcolección alertasRecobro, así que no hace
+  // falta ninguna consulta nueva ni collectionGroup) en una sola lista,
+  // ordenada por más reciente primero.
+  const elListaAlertas = document.getElementById('lista-alertas')
+  const elVacioAlertas = document.getElementById('vacio-alertas')
+  const elBadgeAlertasTab = document.getElementById('badge-alertas-tab')
+
+  function nombreDeEstacionamiento(slug) {
+    const docSnap = ultimoSnapshotEstado?.docs.find((d) => d.id === slug)
+    return docSnap?.data().nombre || slug
+  }
+
+  function renderizarVistaAlertas() {
+    const todas = []
+    for (const [slug, alertas] of alertasPorSlug) {
+      for (const a of alertas) todas.push({ ...a, slug })
+    }
+    todas.sort((a, b) => (b.detectadoEn?.toMillis?.() ?? 0) - (a.detectadoEn?.toMillis?.() ?? 0))
+
+    elBadgeAlertasTab.textContent = todas.length ? ` (${todas.length})` : ''
+
+    if (todas.length === 0) {
+      elListaAlertas.innerHTML = ''
+      elVacioAlertas.style.display = 'block'
+      return
+    }
+    elVacioAlertas.style.display = 'none'
+
+    const filas = todas
+      .map((a) => {
+        const fecha = a.detectadoEn?.toDate ? a.detectadoEn.toDate().toLocaleString() : ''
+        return `
+          <div class="fila-serie">
+            <div>
+              <div class="nombre">${nombreDeEstacionamiento(a.slug)} — ${a.serie}-${a.folio} (${a.tipoVehiculo})</div>
+              <div class="hint">${a.intentos} intentos — último: ${a.nombreUsuario}${fecha ? ` — ${fecha}` : ''}</div>
+            </div>
+            <button data-slug="${a.slug}" data-id="${a.id}">Marcar revisada</button>
+          </div>
+        `
+      })
+      .join('')
+    elListaAlertas.innerHTML = `<div class="tarjeta">${filas}</div>`
+    elListaAlertas.querySelectorAll('button[data-id]').forEach((btn) => {
+      btn.addEventListener('click', () => marcarAlertaRevisada(btn.dataset.slug, btn.dataset.id))
+    })
   }
 
   function abrirAlertas(slug) {
@@ -1369,6 +1431,7 @@
         renderizarTarjetasEstado(snapshot)
         renderizarListaEstacionamientos(elTarjetasConfig, elVacioConfig, snapshot, abrirEditorConfig)
         renderizarListaEstacionamientos(elTarjetasFacturacion, elVacioFacturacion, snapshot, abrirFacturacion)
+        renderizarVistaAlertas()
         if (esSuperAdmin) renderizarAsignaciones()
       },
       (error) => { elEstadoConexion.textContent = `Error de conexión: ${error.message}` }

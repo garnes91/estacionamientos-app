@@ -1,0 +1,29 @@
+rules_version = '2';
+
+// Reglas de Firebase Storage para el mismo proyecto compartido de
+// monitoreo/facturación (ver firestore.rules) — aquí solo vive el respaldo
+// en la nube de la base de datos de cada estacionamiento (src/main/
+// respaldoNube.ts). Mismo criterio de confianza que ya usa firestore.rules
+// para "estacionamientos/{slug}": cualquier sesión autenticada (incluida
+// la anónima, que es la que usa la app de escritorio) puede leer/escribir
+// su propio slug — no hay forma de probar criptográficamente qué slug le
+// corresponde a cada instalación, así que la app confía en no escribir
+// fuera del suyo.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /respaldos/{slug} {
+      allow list: if request.auth != null;
+    }
+
+    match /respaldos/{slug}/{archivo} {
+      allow read, delete: if request.auth != null;
+      // Tope generoso (muy por encima de lo que pesa esta base de datos
+      // hoy) solo para no dejar la puerta abierta a subir cualquier cosa.
+      allow create, update: if request.auth != null && request.resource.size < 200 * 1024 * 1024;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

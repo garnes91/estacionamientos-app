@@ -17,7 +17,8 @@ const configEjemplo = {
   habilitado: true,
   apiKey: 'AIzaSyABC123',
   projectId: 'mi-proyecto-firebase',
-  slug: 'centro'
+  slug: 'centro',
+  respaldoNube: true
 }
 
 describe('obtenerConfiguracionMonitoreo', () => {

@@ -223,6 +223,7 @@ interface ConfiguracionMonitoreoApi {
   apiKey: string
   projectId: string
   slug: string
+  respaldoNube: boolean
 }
 
 interface ConfiguracionImpresionApi {
@@ -544,6 +545,7 @@ declare global {
         }
         respaldo: {
           listar: () => Promise<RespaldoInfoApi[]>
+          listarNube: () => Promise<RespaldoInfoApi[]>
           exportar: () => Promise<string | null>
           restaurar: () => Promise<boolean>
         }

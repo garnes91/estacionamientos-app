@@ -5,6 +5,10 @@ export interface ConfiguracionMonitoreo {
   apiKey: string
   projectId: string
   slug: string
+  // Independiente de `habilitado` (que es el latido en vivo): sube el
+  // respaldo automático diario a Firebase Storage, reutilizando estas
+  // mismas credenciales. Ver src/main/respaldoNube.ts.
+  respaldoNube: boolean
 }
 
 interface ConfiguracionMonitoreoRow {
@@ -12,17 +16,24 @@ interface ConfiguracionMonitoreoRow {
   api_key: string
   project_id: string
   slug: string
+  respaldo_nube: number
 }
 
 export function obtenerConfiguracionMonitoreo(db: DB, estacionamientoId: number): ConfiguracionMonitoreo | null {
   const fila = db
     .prepare<[number], ConfiguracionMonitoreoRow>(
-      'SELECT habilitado, api_key, project_id, slug FROM configuracion_monitoreo WHERE estacionamiento_id = ?'
+      'SELECT habilitado, api_key, project_id, slug, respaldo_nube FROM configuracion_monitoreo WHERE estacionamiento_id = ?'
     )
     .get(estacionamientoId)
 
   if (!fila) return null
-  return { habilitado: fila.habilitado === 1, apiKey: fila.api_key, projectId: fila.project_id, slug: fila.slug }
+  return {
+    habilitado: fila.habilitado === 1,
+    apiKey: fila.api_key,
+    projectId: fila.project_id,
+    slug: fila.slug,
+    respaldoNube: fila.respaldo_nube === 1
+  }
 }
 
 const SLUG_VALIDO = /^[a-z0-9-]{1,64}$/
@@ -38,12 +49,20 @@ export function guardarConfiguracionMonitoreo(
   }
 
   db.prepare(
-    `INSERT INTO configuracion_monitoreo (estacionamiento_id, habilitado, api_key, project_id, slug)
-     VALUES (?,?,?,?,?)
+    `INSERT INTO configuracion_monitoreo (estacionamiento_id, habilitado, api_key, project_id, slug, respaldo_nube)
+     VALUES (?,?,?,?,?,?)
      ON CONFLICT(estacionamiento_id) DO UPDATE SET
        habilitado = excluded.habilitado,
        api_key = excluded.api_key,
        project_id = excluded.project_id,
-       slug = excluded.slug`
-  ).run(estacionamientoId, config.habilitado ? 1 : 0, config.apiKey, config.projectId, slug)
+       slug = excluded.slug,
+       respaldo_nube = excluded.respaldo_nube`
+  ).run(
+    estacionamientoId,
+    config.habilitado ? 1 : 0,
+    config.apiKey,
+    config.projectId,
+    slug,
+    config.respaldoNube ? 1 : 0
+  )
 }

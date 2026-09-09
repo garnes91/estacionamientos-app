@@ -306,9 +306,9 @@ contextBridge.exposeInMainWorld('api', {
       obtener: (estacionamientoId: number) => ipcRenderer.invoke('admin:monitoreo:obtener', estacionamientoId),
       guardar: (params: {
         estacionamientoId: number
-        config: { habilitado: boolean; apiKey: string; projectId: string; slug: string }
+        config: { habilitado: boolean; apiKey: string; projectId: string; slug: string; respaldoNube: boolean }
       }) => ipcRenderer.invoke('admin:monitoreo:guardar', params),
-      probar: (config: { habilitado: boolean; apiKey: string; projectId: string; slug: string }) =>
+      probar: (config: { habilitado: boolean; apiKey: string; projectId: string; slug: string; respaldoNube: boolean }) =>
         ipcRenderer.invoke('monitoreo:probar', config)
     },
     impresion: {
@@ -344,6 +344,7 @@ contextBridge.exposeInMainWorld('api', {
     },
     respaldo: {
       listar: () => ipcRenderer.invoke('admin:respaldo:listar'),
+      listarNube: () => ipcRenderer.invoke('admin:respaldo:listarNube'),
       // Devuelve la ruta donde se guardó, o null si el admin canceló el diálogo.
       exportar: () => ipcRenderer.invoke('admin:respaldo:exportar'),
       // Devuelve true si restauró (y la app ya se está reiniciando), o false

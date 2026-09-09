@@ -39,6 +39,12 @@ export function migrarColumnasFaltantes(db: DB): void {
     'ticket_impresora_compartida',
     'ticket_impresora_compartida TEXT'
   )
+  agregarColumnaSiFalta(
+    db,
+    'configuracion_monitoreo',
+    'respaldo_nube',
+    'respaldo_nube INTEGER NOT NULL DEFAULT 0 CHECK (respaldo_nube IN (0, 1))'
+  )
 }
 
 function tablaExiste(db: DB, tabla: string): boolean {

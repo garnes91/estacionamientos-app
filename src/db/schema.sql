@@ -268,6 +268,7 @@ CREATE TABLE IF NOT EXISTS configuracion_monitoreo (
   api_key             TEXT NOT NULL,
   project_id          TEXT NOT NULL,
   slug                TEXT NOT NULL,
+  respaldo_nube       INTEGER NOT NULL DEFAULT 0 CHECK (respaldo_nube IN (0, 1)),
   UNIQUE (estacionamiento_id)
 );
 

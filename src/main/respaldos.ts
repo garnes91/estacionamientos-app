@@ -46,6 +46,11 @@ function carpetaRespaldos(carpetaUserData: string): string {
   return ruta
 }
 
+/** Ruta del respaldo automático local del día — el mismo archivo que sube respaldoNube.ts a la nube, sin volver a respaldar la base. */
+export function rutaRespaldoDelDia(carpetaUserData: string, fecha: Date): string {
+  return join(carpetaRespaldos(carpetaUserData), nombreRespaldoDelDia(fecha))
+}
+
 /**
  * Respaldo automático diario — si ya existe el de hoy, no hace nada (se
  * puede llamar en cada arranque de la app sin duplicar trabajo). Se llama

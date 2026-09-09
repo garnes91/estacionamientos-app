@@ -8,11 +8,13 @@ import {
   restaurarDesdeArchivo,
   validarArchivoDeRespaldo
 } from './respaldos'
+import { listarRespaldosNube } from './respaldoNube'
 import {
   actualizarCargoBoletoPerdido,
   actualizarNombreEstacionamiento,
   actualizarTextoBoleto,
-  actualizarUmbralRecobroSospechoso
+  actualizarUmbralRecobroSospechoso,
+  obtenerEstacionamientoActual
 } from '../db/estacionamientos'
 import {
   actualizarTipoVehiculo,
@@ -319,6 +321,18 @@ export function registrarIpcAdmin(): void {
   ipcMain.handle('admin:respaldo:listar', () => {
     requerirAdmin()
     return listarRespaldosAutomaticos(app.getPath('userData'))
+  })
+
+  // Respaldo en la nube: ver src/main/respaldoNube.ts. Truena si no hay
+  // proyecto de Firebase configurado — la pestaña Respaldo lo captura y
+  // muestra el mensaje de "configura Monitoreo primero" en vez de un error.
+  ipcMain.handle('admin:respaldo:listarNube', () => {
+    requerirAdmin()
+    const db = obtenerDb()
+    const estacionamiento = obtenerEstacionamientoActual(db)
+    const config = obtenerConfiguracionMonitoreo(db, estacionamiento.id)
+    if (!config) throw new Error('No hay un proyecto de Firebase configurado (ver pestaña Monitoreo).')
+    return listarRespaldosNube(config)
   })
 
   // Respaldo manual: a diferencia del automático (mismo disco que la base

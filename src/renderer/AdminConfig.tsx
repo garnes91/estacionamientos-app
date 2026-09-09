@@ -1176,9 +1176,16 @@ interface ConfiguracionMonitoreo {
   apiKey: string
   projectId: string
   slug: string
+  respaldoNube: boolean
 }
 
-const MONITOREO_VACIO: ConfiguracionMonitoreo = { habilitado: false, apiKey: '', projectId: '', slug: '' }
+const MONITOREO_VACIO: ConfiguracionMonitoreo = {
+  habilitado: false,
+  apiKey: '',
+  projectId: '',
+  slug: '',
+  respaldoNube: false
+}
 
 function TabMonitoreo({ estacionamientoId, avisar, avisarError }: TabProps): ReactElement {
   const [config, setConfig] = useState<ConfiguracionMonitoreo>(MONITOREO_VACIO)
@@ -1577,11 +1584,16 @@ function TabFacturacion({ estacionamientoId, avisar, avisarError }: TabProps): R
 // Respaldo — copia de seguridad de la base de datos local
 // (ver src/main/respaldos.ts)
 // ============================================================
-function TabRespaldo({ avisar, avisarError }: TabProps): ReactElement {
+function TabRespaldo({ estacionamientoId, avisar, avisarError }: TabProps): ReactElement {
   const [respaldos, setRespaldos] = useState<{ archivo: string; fecha: string; tamanoBytes: number }[]>([])
   const [cargando, setCargando] = useState(true)
   const [exportando, setExportando] = useState(false)
   const [restaurando, setRestaurando] = useState(false)
+
+  const [configNube, setConfigNube] = useState<ConfiguracionMonitoreo | null>(null)
+  const [respaldosNube, setRespaldosNube] = useState<{ archivo: string; fecha: string; tamanoBytes: number }[]>([])
+  const [cargandoNube, setCargandoNube] = useState(true)
+  const [guardandoNube, setGuardandoNube] = useState(false)
 
   useEffect(() => {
     window.api.admin.respaldo
@@ -1590,6 +1602,34 @@ function TabRespaldo({ avisar, avisarError }: TabProps): ReactElement {
       .catch(avisarError)
       .finally(() => setCargando(false))
   }, [])
+
+  useEffect(() => {
+    window.api.admin.monitoreo.obtener(estacionamientoId).then(setConfigNube).catch(avisarError)
+  }, [estacionamientoId])
+
+  useEffect(() => {
+    window.api.admin.respaldo
+      .listarNube()
+      .then(setRespaldosNube)
+      // Silencioso: lo normal es que todavía no esté configurado el proyecto de Firebase.
+      .catch(() => {})
+      .finally(() => setCargandoNube(false))
+  }, [])
+
+  async function alternarRespaldoNube(activo: boolean): Promise<void> {
+    if (!configNube) return
+    setGuardandoNube(true)
+    try {
+      const nuevaConfig = { ...configNube, respaldoNube: activo }
+      await window.api.admin.monitoreo.guardar({ estacionamientoId, config: nuevaConfig })
+      setConfigNube(nuevaConfig)
+      avisar(activo ? 'Respaldo en la nube activado — se sube todos los días junto con el local.' : 'Respaldo en la nube desactivado')
+    } catch (e) {
+      avisarError(e)
+    } finally {
+      setGuardandoNube(false)
+    }
+  }
 
   async function exportar(): Promise<void> {
     setExportando(true)
@@ -1664,6 +1704,56 @@ function TabRespaldo({ avisar, avisarError }: TabProps): ReactElement {
             ))}
           </tbody>
         </table>
+      )}
+
+      <h3>Respaldo automático en la nube</h3>
+      <p style={{ color: '#666', fontSize: '0.85rem' }}>
+        Sube ese mismo respaldo automático diario a Firebase Storage — el único que sí sobrevive si esta computadora
+        falla por completo, sin que nadie tenga que acordarse de exportar nada. Reutiliza el proyecto de Firebase
+        configurado en la pestaña "Monitoreo". Igual que el local, se conservan los últimos 14 días.
+      </p>
+      {!configNube || !configNube.apiKey || !configNube.projectId || !configNube.slug ? (
+        <p style={{ color: '#999', fontSize: '0.85rem' }}>
+          Primero configura un proyecto de Firebase en la pestaña "Monitoreo" (API key, ID de proyecto e
+          identificador) — el respaldo en la nube reutiliza esos mismos datos.
+        </p>
+      ) : (
+        <>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+            <input
+              type="checkbox"
+              checked={configNube.respaldoNube}
+              disabled={guardandoNube}
+              onChange={(e) => alternarRespaldoNube(e.target.checked)}
+            />
+            Subir el respaldo diario a la nube
+          </label>
+          {cargandoNube ? (
+            <p style={{ color: '#999', fontSize: '0.85rem' }}>Cargando…</p>
+          ) : respaldosNube.length === 0 ? (
+            <p style={{ color: '#999', fontSize: '0.85rem' }}>
+              Todavía no hay ningún respaldo en la nube — se crea el primero la próxima vez que abras la app con esto
+              activado.
+            </p>
+          ) : (
+            <table cellPadding={6} style={{ borderCollapse: 'collapse', width: '100%', maxWidth: 480 }}>
+              <thead>
+                <tr>
+                  <th style={thStyle}>Archivo</th>
+                  <th style={thStyle}>Tamaño</th>
+                </tr>
+              </thead>
+              <tbody>
+                {respaldosNube.map((r) => (
+                  <tr key={r.archivo}>
+                    <td style={tdStyle}>{r.archivo}</td>
+                    <td style={tdStyle}>{formatearTamano(r.tamanoBytes)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </>
       )}
 
       <h3>Restaurar desde un respaldo</h3>

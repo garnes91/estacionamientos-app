@@ -280,7 +280,17 @@ export function OperacionBoletos({
   // global con las teclas que llegan casi pegadas y, si al llegar Enter
   // forman un folio válido, se cobra directo — sin necesidad de haber
   // hecho clic antes en el campo de "folio escaneado".
-  const UMBRAL_ESCANEO_MS = 40
+  //
+  // El umbral necesita margen para VMs/máquinas lentas: lo que mide no es
+  // qué tan rápido el lector manda los caracteres, sino qué tan separado
+  // le LLEGAN a este código — si el hilo de la interfaz se atora un
+  // instante (VM con poca CPU, por ejemplo), el evento de una tecla puede
+  // procesarse con retraso aunque el lector la haya mandado pegada a la
+  // anterior, y la ráfaga se malinterpreta como varias pulsaciones sueltas
+  // (reportado: 3 dígitos sueltos en placa, o "boleto no existe" por un
+  // buffer incompleto). 80ms sigue siendo mucho más rápido que cualquier
+  // tecleo humano real (>100ms típico) pero da margen a ese retraso.
+  const UMBRAL_ESCANEO_MS = 80
   const ultimoTecleoRef = useRef(0)
   const bufferEscaneoRef = useRef('')
   const folioInputRef = useRef<HTMLInputElement>(null)

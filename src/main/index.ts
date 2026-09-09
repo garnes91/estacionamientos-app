@@ -5,7 +5,8 @@ import { registrarImpresion } from './print'
 import { registrarCorreo } from './email'
 import { iniciarLatidos } from './heartbeat'
 import { iniciarActualizacionesAutomaticas } from './autoUpdater'
-import { cerrarDb } from './db'
+import { cerrarDb, obtenerDb } from './db'
+import { respaldarSiHaceFalta } from './respaldos'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -37,6 +38,13 @@ app.whenReady().then(() => {
   iniciarLatidos()
   iniciarActualizacionesAutomaticas()
   createWindow()
+
+  // Respaldo automático diario de la base de datos — silencioso, no
+  // bloquea el arranque; un error aquí (ej. disco lleno) no debe tumbar
+  // la app. Ver src/main/respaldos.ts.
+  respaldarSiHaceFalta(obtenerDb(), app.getPath('userData')).catch((error) => {
+    console.error('No se pudo hacer el respaldo automático:', error)
+  })
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

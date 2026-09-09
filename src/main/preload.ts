@@ -341,6 +341,11 @@ contextBridge.exposeInMainWorld('api', {
           claveUnidad: string
         }
       }) => ipcRenderer.invoke('admin:facturacion:guardar', params)
+    },
+    respaldo: {
+      listar: () => ipcRenderer.invoke('admin:respaldo:listar'),
+      // Devuelve la ruta donde se guardó, o null si el admin canceló el diálogo.
+      exportar: () => ipcRenderer.invoke('admin:respaldo:exportar')
     }
   }
 })

@@ -1,6 +1,7 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { obtenerDb } from './db'
 import { requerirAdmin } from './auth'
+import { exportarRespaldo, listarRespaldosAutomaticos } from './respaldos'
 import {
   actualizarCargoBoletoPerdido,
   actualizarNombreEstacionamiento,
@@ -304,5 +305,30 @@ export function registrarIpcAdmin(): void {
   ipcMain.handle('admin:impresion:listarImpresorasUsb', () => {
     requerirAdmin()
     return listarImpresorasUsb()
+  })
+
+  // Ver src/main/respaldos.ts: el automático es silencioso (uno por día,
+  // en la carpeta de datos de la app); esta lista es solo para que el
+  // admin vea que sí están corriendo.
+  ipcMain.handle('admin:respaldo:listar', () => {
+    requerirAdmin()
+    return listarRespaldosAutomaticos(app.getPath('userData'))
+  })
+
+  // Respaldo manual: a diferencia del automático (mismo disco que la base
+  // real), este sí protege contra que falle el disco completo — el admin
+  // elige dónde guardarlo (USB, Google Drive, etc.).
+  ipcMain.handle('admin:respaldo:exportar', async () => {
+    requerirAdmin()
+    const opciones: Electron.SaveDialogOptions = {
+      title: 'Guardar respaldo',
+      defaultPath: `estacionamientos-respaldo-${new Date().toISOString().slice(0, 10)}.db`,
+      filters: [{ name: 'Base de datos', extensions: ['db'] }]
+    }
+    const ventana = BrowserWindow.getFocusedWindow()
+    const resultado = ventana ? await dialog.showSaveDialog(ventana, opciones) : await dialog.showSaveDialog(opciones)
+    if (resultado.canceled || !resultado.filePath) return null
+    await exportarRespaldo(obtenerDb(), resultado.filePath)
+    return resultado.filePath
   })
 }

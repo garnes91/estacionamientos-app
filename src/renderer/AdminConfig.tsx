@@ -13,7 +13,8 @@ const TABS = [
   'correo',
   'monitoreo',
   'impresion',
-  'facturacion'
+  'facturacion',
+  'respaldo'
 ] as const
 type Tab = (typeof TABS)[number]
 
@@ -27,7 +28,8 @@ const TAB_LABELS: Record<Tab, string> = {
   correo: 'Correo',
   monitoreo: 'Monitoreo en la nube',
   impresion: 'Impresoras',
-  facturacion: 'Facturación'
+  facturacion: 'Facturación',
+  respaldo: 'Respaldo'
 }
 
 const inputStyle: React.CSSProperties = { padding: '0.35rem', fontSize: '0.9rem' }
@@ -129,6 +131,9 @@ export function AdminConfig({
       )}
       {tab === 'facturacion' && (
         <TabFacturacion estacionamientoId={estacionamientoId} avisar={avisar} avisarError={avisarError} />
+      )}
+      {tab === 'respaldo' && (
+        <TabRespaldo estacionamientoId={estacionamientoId} avisar={avisar} avisarError={avisarError} />
       )}
     </div>
   )
@@ -1564,6 +1569,86 @@ function TabFacturacion({ estacionamientoId, avisar, avisarError }: TabProps): R
           Guardar
         </button>
       </div>
+    </div>
+  )
+}
+
+// ============================================================
+// Respaldo — copia de seguridad de la base de datos local
+// (ver src/main/respaldos.ts)
+// ============================================================
+function TabRespaldo({ avisar, avisarError }: TabProps): ReactElement {
+  const [respaldos, setRespaldos] = useState<{ archivo: string; fecha: string; tamanoBytes: number }[]>([])
+  const [cargando, setCargando] = useState(true)
+  const [exportando, setExportando] = useState(false)
+
+  useEffect(() => {
+    window.api.admin.respaldo
+      .listar()
+      .then(setRespaldos)
+      .catch(avisarError)
+      .finally(() => setCargando(false))
+  }, [])
+
+  async function exportar(): Promise<void> {
+    setExportando(true)
+    try {
+      const ruta = await window.api.admin.respaldo.exportar()
+      if (ruta) avisar(`Respaldo guardado en: ${ruta}`)
+    } catch (e) {
+      avisarError(e)
+    } finally {
+      setExportando(false)
+    }
+  }
+
+  function formatearTamano(bytes: number): string {
+    const mb = bytes / (1024 * 1024)
+    return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`
+  }
+
+  return (
+    <div>
+      <h3 style={{ marginTop: 0 }}>Respaldo manual</h3>
+      <p style={{ color: '#666', fontSize: '0.85rem' }}>
+        Guarda una copia completa de la base de datos de este estacionamiento donde tú elijas — una USB, Google
+        Drive, Dropbox, etc. Es el único respaldo que sobrevive si esta computadora falla por completo, así que
+        conviene guardarlo en OTRO dispositivo, no en esta misma máquina.
+      </p>
+      <button onClick={exportar} disabled={exportando}>
+        {exportando ? 'Guardando…' : 'Exportar respaldo ahora'}
+      </button>
+
+      <h3>Respaldos automáticos</h3>
+      <p style={{ color: '#666', fontSize: '0.85rem' }}>
+        Además, la app guarda un respaldo automático todos los días en esta misma computadora (protege contra un
+        error de la app o un borrado accidental, pero NO contra que falle el disco — para eso sirve el respaldo
+        manual de arriba). Se conservan los últimos 14 días, los más viejos se borran solos.
+      </p>
+      {cargando ? (
+        <p style={{ color: '#999', fontSize: '0.85rem' }}>Cargando…</p>
+      ) : respaldos.length === 0 ? (
+        <p style={{ color: '#999', fontSize: '0.85rem' }}>
+          Todavía no hay ningún respaldo automático — se crea el primero la próxima vez que abras la app.
+        </p>
+      ) : (
+        <table cellPadding={6} style={{ borderCollapse: 'collapse', width: '100%', maxWidth: 480 }}>
+          <thead>
+            <tr>
+              <th style={thStyle}>Archivo</th>
+              <th style={thStyle}>Tamaño</th>
+            </tr>
+          </thead>
+          <tbody>
+            {respaldos.map((r) => (
+              <tr key={r.archivo}>
+                <td style={tdStyle}>{r.archivo}</td>
+                <td style={tdStyle}>{formatearTamano(r.tamanoBytes)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   )
 }

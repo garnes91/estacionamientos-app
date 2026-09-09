@@ -240,6 +240,12 @@ interface ImpresoraUsbApi {
   nombre: string
 }
 
+interface RespaldoInfoApi {
+  archivo: string
+  fecha: string
+  tamanoBytes: number
+}
+
 interface ConfiguracionFacturacionApi {
   habilitado: boolean
   rfc: string
@@ -535,6 +541,10 @@ declare global {
         facturacion: {
           obtener: (estacionamientoId: number) => Promise<ConfiguracionFacturacionApi | null>
           guardar: (params: { estacionamientoId: number; config: ConfiguracionFacturacionApi }) => Promise<void>
+        }
+        respaldo: {
+          listar: () => Promise<RespaldoInfoApi[]>
+          exportar: () => Promise<string | null>
         }
       }
     }

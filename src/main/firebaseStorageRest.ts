@@ -54,9 +54,14 @@ export async function listarArchivos(
   prefijo: string
 ): Promise<ArchivoStorage[]> {
   const token = await obtenerTokenAnonimo(config.apiKey)
-  const resp = await fetch(`https://firebasestorage.googleapis.com/v0/b/${bucket}/o?prefix=${encodeURIComponent(prefijo)}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  })
+  // delimiter=/ es lo que hace que esto sea un listado "de un solo nivel"
+  // (como ls de una carpeta) — sin él, Storage lo trata como un listado
+  // recursivo de todo lo que empiece con el prefijo, y las reglas de
+  // "list" de storage.rules (ver ahí) no lo autorizan igual.
+  const resp = await fetch(
+    `https://firebasestorage.googleapis.com/v0/b/${bucket}/o?prefix=${encodeURIComponent(prefijo)}&delimiter=%2F`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
   if (!resp.ok) {
     throw new Error(`Firebase Storage respondió ${resp.status} al listar: ${await resp.text()}`)
   }

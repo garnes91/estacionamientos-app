@@ -11,12 +11,11 @@ rules_version = '2';
 // fuera del suyo.
 service firebase.storage {
   match /b/{bucket}/o {
-    match /respaldos/{slug} {
-      allow list: if request.auth != null;
-    }
-
+    // "list" va junto con el resto de permisos del objeto (no en un nodo
+    // "carpeta" aparte) — así lo documenta Firebase, y solo aplica a
+    // listados de un solo nivel (con delimiter=/, ver firebaseStorageRest.ts).
     match /respaldos/{slug}/{archivo} {
-      allow read, delete: if request.auth != null;
+      allow read, list, delete: if request.auth != null;
       // Tope generoso (muy por encima de lo que pesa esta base de datos
       // hoy) solo para no dejar la puerta abierta a subir cualquier cosa.
       allow create, update: if request.auth != null && request.resource.size < 200 * 1024 * 1024;

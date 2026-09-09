@@ -545,6 +545,7 @@ declare global {
         respaldo: {
           listar: () => Promise<RespaldoInfoApi[]>
           exportar: () => Promise<string | null>
+          restaurar: () => Promise<boolean>
         }
       }
     }

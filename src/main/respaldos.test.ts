@@ -1,15 +1,19 @@
-import { existsSync, mkdtempSync, readdirSync, rmSync } from 'fs'
+import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { abrirDb, DB } from '../db'
 import { sembrarSiVacio } from '../db/seed'
+import { actualizarNombreEstacionamiento, obtenerEstacionamientoActual } from '../db/estacionamientos'
 import {
   exportarRespaldo,
   listarRespaldosAutomaticos,
   nombreRespaldoDelDia,
   respaldarSiHaceFalta,
-  respaldosAEliminar
+  respaldoDeSeguridad,
+  respaldosAEliminar,
+  restaurarDesdeArchivo,
+  validarArchivoDeRespaldo
 } from './respaldos'
 
 describe('respaldosAEliminar', () => {
@@ -93,5 +97,103 @@ describe('respaldarSiHaceFalta / listarRespaldosAutomaticos / exportarRespaldo',
     const { id } = copia.prepare('SELECT id FROM estacionamientos LIMIT 1').get() as { id: number }
     expect(id).toBeGreaterThan(0)
     copia.close()
+  })
+})
+
+describe('validarArchivoDeRespaldo', () => {
+  let carpetaTemporal: string
+
+  beforeEach(() => {
+    carpetaTemporal = mkdtempSync(join(tmpdir(), 'estacionamientos-respaldos-test-'))
+  })
+
+  afterEach(() => {
+    rmSync(carpetaTemporal, { recursive: true, force: true })
+  })
+
+  it('no truena con un respaldo real (tiene al menos un estacionamiento)', async () => {
+    const db = abrirDb(':memory:')
+    sembrarSiVacio(db)
+    const ruta = join(carpetaTemporal, 'valido.db')
+    await db.backup(ruta)
+    db.close()
+
+    expect(() => validarArchivoDeRespaldo(ruta)).not.toThrow()
+  })
+
+  it('rechaza un archivo que ni siquiera es SQLite', () => {
+    const ruta = join(carpetaTemporal, 'no-es-sqlite.db')
+    writeFileSync(ruta, 'esto no es una base de datos')
+    expect(() => validarArchivoDeRespaldo(ruta)).toThrow()
+  })
+})
+
+describe('respaldoDeSeguridad', () => {
+  it('crea un archivo con prefijo "antes-de-restaurar-" y devuelve su ruta', async () => {
+    const db = abrirDb(':memory:')
+    sembrarSiVacio(db)
+    const carpetaTemporal = mkdtempSync(join(tmpdir(), 'estacionamientos-respaldos-test-'))
+    try {
+      const ruta = await respaldoDeSeguridad(db, carpetaTemporal, new Date('2026-09-09T15:04:05.000Z'))
+      expect(ruta).toContain('antes-de-restaurar-2026-09-09')
+      expect(existsSync(ruta)).toBe(true)
+    } finally {
+      db.close()
+      rmSync(carpetaTemporal, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('restaurarDesdeArchivo', () => {
+  let carpetaTemporal: string
+
+  beforeEach(() => {
+    carpetaTemporal = mkdtempSync(join(tmpdir(), 'estacionamientos-respaldos-test-'))
+  })
+
+  afterEach(() => {
+    rmSync(carpetaTemporal, { recursive: true, force: true })
+  })
+
+  it('sobrescribe rutaDb con el contenido del archivo de respaldo (no con lo que ya tenía)', async () => {
+    // "Respaldo" a restaurar: un estacionamiento llamado "Del respaldo".
+    const origen = abrirDb(':memory:')
+    sembrarSiVacio(origen)
+    actualizarNombreEstacionamiento(origen, obtenerEstacionamientoActual(origen).id, 'Del respaldo')
+    const rutaOrigen = join(carpetaTemporal, 'respaldo-a-restaurar.db')
+    await origen.backup(rutaOrigen)
+    origen.close()
+
+    // "Base viva" actual: un estacionamiento con OTRO nombre — esto es lo
+    // que debe desaparecer después de restaurar.
+    const rutaDb = join(carpetaTemporal, 'estacionamientos.db')
+    const viva = abrirDb(rutaDb)
+    sembrarSiVacio(viva)
+    actualizarNombreEstacionamiento(viva, obtenerEstacionamientoActual(viva).id, 'Base viva (antes de restaurar)')
+    viva.close()
+
+    await restaurarDesdeArchivo(rutaOrigen, rutaDb)
+
+    const resultado = abrirDb(rutaDb)
+    expect(obtenerEstacionamientoActual(resultado).nombre).toBe('Del respaldo')
+    resultado.close()
+  })
+
+  it('limpia archivos -wal/-shm/-journal sueltos de la base viva antes de sobrescribir', async () => {
+    const origen = abrirDb(':memory:')
+    sembrarSiVacio(origen)
+    const rutaOrigen = join(carpetaTemporal, 'respaldo-a-restaurar.db')
+    await origen.backup(rutaOrigen)
+    origen.close()
+
+    const rutaDb = join(carpetaTemporal, 'estacionamientos.db')
+    writeFileSync(rutaDb, '')
+    writeFileSync(`${rutaDb}-wal`, 'basura de una sesión anterior')
+    writeFileSync(`${rutaDb}-shm`, 'basura de una sesión anterior')
+
+    await restaurarDesdeArchivo(rutaOrigen, rutaDb)
+
+    expect(existsSync(`${rutaDb}-wal`)).toBe(false)
+    expect(existsSync(`${rutaDb}-shm`)).toBe(false)
   })
 })

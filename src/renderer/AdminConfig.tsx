@@ -1581,6 +1581,7 @@ function TabRespaldo({ avisar, avisarError }: TabProps): ReactElement {
   const [respaldos, setRespaldos] = useState<{ archivo: string; fecha: string; tamanoBytes: number }[]>([])
   const [cargando, setCargando] = useState(true)
   const [exportando, setExportando] = useState(false)
+  const [restaurando, setRestaurando] = useState(false)
 
   useEffect(() => {
     window.api.admin.respaldo
@@ -1599,6 +1600,21 @@ function TabRespaldo({ avisar, avisarError }: TabProps): ReactElement {
       avisarError(e)
     } finally {
       setExportando(false)
+    }
+  }
+
+  async function restaurar(): Promise<void> {
+    setRestaurando(true)
+    try {
+      // El diálogo de archivo y la confirmación con la advertencia los
+      // maneja el proceso principal (ver admin:respaldo:restaurar en
+      // ipcAdmin.ts); si restauró, la app entera se reinicia sola, así que
+      // aquí solo hace falta manejar el caso de que se haya cancelado.
+      const restauro = await window.api.admin.respaldo.restaurar()
+      if (!restauro) setRestaurando(false)
+    } catch (e) {
+      avisarError(e)
+      setRestaurando(false)
     }
   }
 
@@ -1649,6 +1665,17 @@ function TabRespaldo({ avisar, avisarError }: TabProps): ReactElement {
           </tbody>
         </table>
       )}
+
+      <h3>Restaurar desde un respaldo</h3>
+      <p style={{ color: '#666', fontSize: '0.85rem' }}>
+        Reemplaza TODA la información actual (boletos, tarifas, usuarios, configuración) por lo que tenga un archivo
+        de respaldo elegido. Se te va a pedir confirmar antes de hacer nada, y se guarda automáticamente un respaldo
+        del estado actual por si el archivo elegido resultó ser el equivocado. Úsalo solo si sabes lo que implica —
+        no se puede deshacer desde la app.
+      </p>
+      <button onClick={restaurar} disabled={restaurando} style={{ color: '#a00' }}>
+        {restaurando ? 'Restaurando…' : 'Restaurar desde archivo…'}
+      </button>
     </div>
   )
 }

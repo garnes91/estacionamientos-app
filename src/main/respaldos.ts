@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'fs'
 import { join } from 'path'
-import type { DB } from '../db'
+import { abrirDb, DB } from '../db'
 
 /**
  * Respaldos de la base de datos SQLite de esta instalación (una por
@@ -85,4 +85,62 @@ export function listarRespaldosAutomaticos(carpetaUserData: string): RespaldoInf
 /** Respaldo manual a donde el usuario elija — mismo mecanismo seguro que el automático. */
 export async function exportarRespaldo(db: DB, rutaDestino: string): Promise<void> {
   await db.backup(rutaDestino)
+}
+
+// ============================================================
+// Restaurar — sobrescribe la base viva con un archivo de respaldo. Más
+// delicado que exportar, así que se parte en pasos chicos y explícitos
+// (ver el orden exacto en admin:respaldo:restaurar, ipcAdmin.ts):
+// validar el archivo elegido → respaldo de seguridad del estado actual →
+// cerrar la conexión viva → sobrescribir → relanzar la app.
+// ============================================================
+
+/**
+ * Confirma que un archivo es un respaldo real de esta app antes de
+ * arriesgarse a usarlo — no toca la base viva ni nada más, solo abre y
+ * lee el archivo elegido (abrirDb() ya truena solo si ni siquiera es un
+ * SQLite válido).
+ */
+export function validarArchivoDeRespaldo(rutaArchivo: string): void {
+  const db = abrirDb(rutaArchivo)
+  try {
+    const { n } = db.prepare('SELECT COUNT(*) AS n FROM estacionamientos').get() as { n: number }
+    if (n === 0) {
+      throw new Error('El archivo elegido no tiene ningún estacionamiento — no parece un respaldo válido de esta app.')
+    }
+  } finally {
+    db.close()
+  }
+}
+
+/** Respaldo de seguridad del estado ACTUAL, con nombre explícito — se toma justo antes de restaurar, por si el archivo elegido resultó ser el equivocado. */
+export async function respaldoDeSeguridad(db: DB, carpetaUserData: string, fecha = new Date()): Promise<string> {
+  const carpeta = carpetaRespaldos(carpetaUserData)
+  const ruta = join(carpeta, `antes-de-restaurar-${fecha.toISOString().replace(/[:.]/g, '-')}.db`)
+  await db.backup(ruta)
+  return ruta
+}
+
+/**
+ * Sobrescribe rutaDb con el contenido de rutaArchivoRespaldo. Quien llame
+ * esto ya debe haber: (1) validado el archivo (validarArchivoDeRespaldo),
+ * (2) tomado un respaldo de seguridad del estado actual, y (3) cerrado la
+ * conexión viva a rutaDb (cerrarDb() en db.ts) — esta función no orquesta
+ * nada de eso, solo hace la sobrescritura en disco.
+ */
+export async function restaurarDesdeArchivo(rutaArchivoRespaldo: string, rutaDb: string): Promise<void> {
+  // Limpia rastros de la sesión WAL anterior de rutaDb — si quedan sueltos
+  // y no coinciden con el archivo nuevo, pueden confundir a SQLite al
+  // volver a abrirlo.
+  for (const sufijo of ['-wal', '-shm', '-journal']) {
+    const ruta = rutaDb + sufijo
+    if (existsSync(ruta)) unlinkSync(ruta)
+  }
+
+  const origen = abrirDb(rutaArchivoRespaldo)
+  try {
+    await origen.backup(rutaDb)
+  } finally {
+    origen.close()
+  }
 }

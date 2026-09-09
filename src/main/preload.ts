@@ -345,7 +345,10 @@ contextBridge.exposeInMainWorld('api', {
     respaldo: {
       listar: () => ipcRenderer.invoke('admin:respaldo:listar'),
       // Devuelve la ruta donde se guardó, o null si el admin canceló el diálogo.
-      exportar: () => ipcRenderer.invoke('admin:respaldo:exportar')
+      exportar: () => ipcRenderer.invoke('admin:respaldo:exportar'),
+      // Devuelve true si restauró (y la app ya se está reiniciando), o false
+      // si el admin canceló el diálogo de archivo o la confirmación.
+      restaurar: () => ipcRenderer.invoke('admin:respaldo:restaurar')
     }
   }
 })

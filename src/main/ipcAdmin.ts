@@ -1,7 +1,13 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
-import { obtenerDb } from './db'
+import { cerrarDb, obtenerDb, rutaBaseDeDatos } from './db'
 import { requerirAdmin } from './auth'
-import { exportarRespaldo, listarRespaldosAutomaticos } from './respaldos'
+import {
+  exportarRespaldo,
+  listarRespaldosAutomaticos,
+  respaldoDeSeguridad,
+  restaurarDesdeArchivo,
+  validarArchivoDeRespaldo
+} from './respaldos'
 import {
   actualizarCargoBoletoPerdido,
   actualizarNombreEstacionamiento,
@@ -330,5 +336,53 @@ export function registrarIpcAdmin(): void {
     if (resultado.canceled || !resultado.filePath) return null
     await exportarRespaldo(obtenerDb(), resultado.filePath)
     return resultado.filePath
+  })
+
+  // Restaurar: la operación más delicada de las tres, porque reemplaza TODA
+  // la base viva. Por eso pide confirmación explícita con advertencia y
+  // toma un respaldo de seguridad del estado actual antes de tocar nada —
+  // ver el orden completo en respaldos.ts. Si todo sale bien, se relanza la
+  // app entera en vez de tratar de resetear a mano el estado en memoria
+  // (conexión de BD, caches del renderer, heartbeats, etc.). Devuelve false
+  // si el admin canceló el diálogo de archivo o la confirmación.
+  ipcMain.handle('admin:respaldo:restaurar', async () => {
+    requerirAdmin()
+
+    const ventana = BrowserWindow.getFocusedWindow()
+    const opcionesArchivo: Electron.OpenDialogOptions = {
+      title: 'Elegir archivo de respaldo a restaurar',
+      properties: ['openFile'],
+      filters: [{ name: 'Base de datos', extensions: ['db'] }]
+    }
+    const seleccion = ventana
+      ? await dialog.showOpenDialog(ventana, opcionesArchivo)
+      : await dialog.showOpenDialog(opcionesArchivo)
+    if (seleccion.canceled || seleccion.filePaths.length === 0) return false
+    const rutaElegida = seleccion.filePaths[0]
+
+    validarArchivoDeRespaldo(rutaElegida)
+
+    const opcionesConfirmacion: Electron.MessageBoxOptions = {
+      type: 'warning',
+      buttons: ['Cancelar', 'Restaurar y reiniciar'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Restaurar respaldo',
+      message: 'Esto va a REEMPLAZAR toda la información actual de este estacionamiento.',
+      detail:
+        'Todos los boletos, tarifas, usuarios y configuración actuales se van a perder y se van a reemplazar por lo que tenga el archivo elegido. Se guarda un respaldo del estado actual antes, por si acaso — pero esta acción no se puede deshacer desde la app. La app se va a reiniciar al terminar.'
+    }
+    const confirmacion = ventana
+      ? await dialog.showMessageBox(ventana, opcionesConfirmacion)
+      : await dialog.showMessageBox(opcionesConfirmacion)
+    if (confirmacion.response !== 1) return false
+
+    await respaldoDeSeguridad(obtenerDb(), app.getPath('userData'))
+    cerrarDb()
+    await restaurarDesdeArchivo(rutaElegida, rutaBaseDeDatos())
+
+    app.relaunch()
+    app.exit()
+    return true
   })
 }

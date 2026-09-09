@@ -5,11 +5,15 @@ import { sembrarSiVacio } from '../db/seed'
 
 let db: DB | null = null
 
+/** Ruta del archivo .db real de esta instalación — la misma que usa obtenerDb(). */
+export function rutaBaseDeDatos(): string {
+  return join(app.getPath('userData'), 'estacionamientos.db')
+}
+
 /** Abre la base de datos real de esta instalación (una por estacionamiento). */
 export function obtenerDb(): DB {
   if (!db) {
-    const ruta = join(app.getPath('userData'), 'estacionamientos.db')
-    db = abrirDb(ruta)
+    db = abrirDb(rutaBaseDeDatos())
     sembrarSiVacio(db)
   }
   return db

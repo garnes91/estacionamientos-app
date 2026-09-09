@@ -290,14 +290,28 @@ export function OperacionBoletos({
   // un folio válido (antes solo se limpiaba placa tras un cobro exitoso;
   // un escaneo fallido/mal leído dejaba el residuo ahí para siempre).
   const placaAntesRef = useRef('')
-  // Qué elemento tenía el foco al llegar el PRIMER carácter de la ráfaga
-  // actual — se fija una sola vez y se usa para toda la ráfaga (en vez de
-  // volver a leer document.activeElement en cada tecla). Sin esto, si el
-  // operador da clic en el campo de folio justo mientras el lector todavía
-  // está mandando caracteres, el foco cambia a medio escaneo: el primer
-  // carácter cae en "placa" (foco viejo) y el resto se escribe en el campo
-  // de folio (foco nuevo) — un mismo escaneo partido en dos destinos.
-  const elementoAlIniciarRef = useRef<Element | null>(null)
+  // 'global': esta ráfaga la maneja el buffer de arriba (cobra por la vía
+  // global al llegar Enter). 'local': empezó con el foco ya en el campo de
+  // folio escaneado, así que se deja que teclee normal ahí y su propio
+  // onKeyDown (más abajo) se encargue del Enter.
+  //
+  // Se decide una sola vez, al primer carácter, según dónde estaba el foco
+  // en ESE momento — no se vuelve a leer document.activeElement en cada
+  // tecla para decidir el modo. Sin esto, si el operador da clic en el
+  // campo de folio justo mientras el lector todavía manda caracteres, el
+  // foco cambia a medio escaneo: el primer carácter cae en "placa" (foco
+  // viejo) y el resto se escribe en el campo de folio (foco nuevo) — un
+  // mismo escaneo partido en dos destinos.
+  //
+  // Un modo 'local' SÍ se puede degradar a 'global' a medio escaneo (ver
+  // más abajo) — si el foco se sale del campo de folio antes de terminar,
+  // dejar de prevenir el tecleo dejaría que el resto de caracteres se
+  // escriban en lo que sea que tenga el foco ahora, en vez de en el campo
+  // de folio o en ningún lado. Lo contrario ('global' a medio escaneo) NO
+  // se permite: si empezó fuera del campo de folio, se sigue previniendo
+  // el tecleo pase lo que pase, aunque el foco termine llegando ahí — así
+  // no se repite el problema de arriba en la otra dirección.
+  const modoRafagaRef = useRef<'global' | 'local'>('global')
 
   useEffect(() => {
     function alTecladoGlobal(e: KeyboardEvent): void {
@@ -313,10 +327,11 @@ export function OperacionBoletos({
       if (e.key === 'Enter') {
         const buffer = bufferEscaneoRef.current
         bufferEscaneoRef.current = ''
-        // Si el foco ya estaba en el campo de folio escaneado AL EMPEZAR la
-        // ráfaga, su propio onKeyDown (más abajo) ya se encarga de cobrar —
-        // hacerlo también aquí duplicaría el cobro.
-        if (transcurrido < UMBRAL_ESCANEO_MS && elementoAlIniciarRef.current !== folioInputRef.current) {
+        // Si esta ráfaga sigue en modo 'local' (nunca se degradó), el foco
+        // sigue en el campo de folio escaneado y su propio onKeyDown (más
+        // abajo) ya se encarga de cobrar — hacerlo también aquí duplicaría
+        // el cobro.
+        if (transcurrido < UMBRAL_ESCANEO_MS && modoRafagaRef.current !== 'local') {
           const parseado = parsearFolio(buffer, claveFolio)
           if (parseado) {
             cobrarFolio(parseado, true)
@@ -334,15 +349,21 @@ export function OperacionBoletos({
         const enRafaga = transcurrido < UMBRAL_ESCANEO_MS
         if (!enRafaga) {
           placaAntesRef.current = placa
-          elementoAlIniciarRef.current = document.activeElement
+          modoRafagaRef.current = document.activeElement === folioInputRef.current ? 'local' : 'global'
+        } else if (modoRafagaRef.current === 'local' && document.activeElement !== folioInputRef.current) {
+          // Empezó en modo 'local' pero el foco ya se salió del campo de
+          // folio a medio escaneo — se degrada a 'global' para el resto de
+          // la ráfaga (y se limpia lo que haya quedado tecleado ahí, ya
+          // que de aquí en adelante el buffer se encarga completo).
+          modoRafagaRef.current = 'global'
+          setFolioEscaneado('')
         }
         bufferEscaneoRef.current = enRafaga ? bufferEscaneoRef.current + e.key : e.key
         // A partir del 2do carácter de una ráfaga (la 1ra no se puede saber
         // de antemano) se evita que el escaneo se escriba también en el
-        // campo que tenga el foco — el que tenía el foco AL EMPEZAR la
-        // ráfaga, no el que tenga el foco en este instante (ver comentario
-        // de elementoAlIniciarRef arriba).
-        if (enRafaga && elementoAlIniciarRef.current !== folioInputRef.current) {
+        // campo que tenga el foco — salvo en modo 'local', donde se deja
+        // teclear normal en el campo de folio.
+        if (enRafaga && modoRafagaRef.current !== 'local') {
           e.preventDefault()
         }
       }

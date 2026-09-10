@@ -7,18 +7,22 @@ import type { FormEvent, ReactElement } from 'react'
  * src/main/ipc.ts) — así nadie que se quedó con la ventana abierta puede
  * entrar sin volver a autenticarse. Con `soloAdmin`, además exige que esas
  * credenciales sean de una cuenta con rol admin (ej. Corte mensual) — no
- * basta con que sean válidas.
+ * basta con que sean válidas. `permitirSupervisor` afloja eso un poco: deja
+ * pasar también a una cuenta supervisor (ej. Corte mensual, Estadísticas),
+ * sin abrir la puerta a un empleado normal.
  */
 export function ReautenticarCorte({
   onVerificado,
   onCancelar,
   soloAdmin = false,
+  permitirSupervisor = false,
   titulo = 'Confirmar identidad',
   mensaje = 'Vuelve a introducir tu usuario y contraseña para continuar.'
 }: {
   onVerificado: () => void
   onCancelar: () => void
   soloAdmin?: boolean
+  permitirSupervisor?: boolean
   titulo?: string
   mensaje?: string
 }): ReactElement {
@@ -33,8 +37,13 @@ export function ReautenticarCorte({
     setError(null)
     try {
       const usuario = await window.api.verificarCredenciales({ nombreUsuario, password })
-      if (soloAdmin && usuario.rol !== 'admin') {
-        setError('Se necesita una cuenta de administrador para entrar aquí')
+      const rolValido = usuario.rol === 'admin' || (permitirSupervisor && usuario.rol === 'supervisor')
+      if (soloAdmin && !rolValido) {
+        setError(
+          permitirSupervisor
+            ? 'Se necesita una cuenta de administrador o supervisor para entrar aquí'
+            : 'Se necesita una cuenta de administrador para entrar aquí'
+        )
         return
       }
       onVerificado()

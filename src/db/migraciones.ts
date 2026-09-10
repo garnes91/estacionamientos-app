@@ -45,6 +45,7 @@ export function migrarColumnasFaltantes(db: DB): void {
     'respaldo_nube',
     'respaldo_nube INTEGER NOT NULL DEFAULT 0 CHECK (respaldo_nube IN (0, 1))'
   )
+  ampliarRolUsuariosSiHaceFalta(db)
 }
 
 function tablaExiste(db: DB, tabla: string): boolean {
@@ -58,5 +59,57 @@ export function agregarColumnaSiFalta(db: DB, tabla: string, columna: string, de
   const columnas = db.prepare(`PRAGMA table_info(${tabla})`).all() as { name: string }[]
   if (!columnas.some((c) => c.name === columna)) {
     db.exec(`ALTER TABLE ${tabla} ADD COLUMN ${definicionColumna}`)
+  }
+}
+
+/**
+ * Agrega el rol 'supervisor' al CHECK de usuarios.rol. A diferencia de una
+ * columna nueva, SQLite no deja modificar un CHECK existente con ALTER
+ * TABLE — hay que recrear la tabla completa (procedimiento oficial de
+ * sqlite.org para "other kinds of table schema changes"): crear la tabla
+ * nueva con OTRO nombre, copiar los datos, borrar la vieja, y hasta el
+ * final renombrar la nueva al nombre original. Ese orden importa: si en
+ * vez de eso se renombrara primero la tabla vieja (usuarios → usuarios_old),
+ * SQLite reescribe automáticamente las cláusulas REFERENCES usuarios(id)
+ * de boletos/cortes/gastos/pensionados para que apunten a usuarios_old,
+ * dejando el esquema roto. Con este orden nunca se renombra la tabla que
+ * otras tablas referencian, así que ninguna de ellas se toca.
+ */
+export function ampliarRolUsuariosSiHaceFalta(db: DB): void {
+  if (!tablaExiste(db, 'usuarios')) return // tabla nueva: schema.sql ya la crea con el CHECK correcto
+
+  const fila = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'usuarios'")
+    .get() as { sql: string } | undefined
+  if (!fila || fila.sql.includes('supervisor')) return // ya migrada
+
+  db.pragma('foreign_keys = OFF')
+  try {
+    const migrar = db.transaction(() => {
+      db.exec(`
+        CREATE TABLE usuarios_nueva (
+          id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+          estacionamiento_id  INTEGER NOT NULL REFERENCES estacionamientos(id),
+          nombre_usuario      TEXT NOT NULL,
+          password_hash       TEXT NOT NULL,
+          nombre_completo     TEXT NOT NULL,
+          rol                 TEXT NOT NULL CHECK (rol IN ('admin', 'supervisor', 'empleado')),
+          activo              INTEGER NOT NULL DEFAULT 1 CHECK (activo IN (0, 1)),
+          created_at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+          UNIQUE (estacionamiento_id, nombre_usuario)
+        )
+      `)
+      db.exec('INSERT INTO usuarios_nueva SELECT * FROM usuarios')
+      db.exec('DROP TABLE usuarios')
+      db.exec('ALTER TABLE usuarios_nueva RENAME TO usuarios')
+    })
+    migrar()
+
+    const violaciones = db.pragma('foreign_key_check') as unknown[]
+    if (violaciones.length > 0) {
+      throw new Error('La migración del rol supervisor dejó referencias rotas en foreign keys — no se aplicó.')
+    }
+  } finally {
+    db.pragma('foreign_keys = ON')
   }
 }

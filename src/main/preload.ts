@@ -274,10 +274,14 @@ contextBridge.exposeInMainWorld('api', {
         nombreUsuario: string
         password: string
         nombreCompleto: string
-        rol: 'admin' | 'empleado'
+        rol: 'admin' | 'supervisor' | 'empleado'
       }) => ipcRenderer.invoke('admin:usuarios:crear', params),
-      actualizar: (params: { id: number; nombreCompleto: string; rol: 'admin' | 'empleado'; activo: boolean }) =>
-        ipcRenderer.invoke('admin:usuarios:actualizar', params),
+      actualizar: (params: {
+        id: number
+        nombreCompleto: string
+        rol: 'admin' | 'supervisor' | 'empleado'
+        activo: boolean
+      }) => ipcRenderer.invoke('admin:usuarios:actualizar', params),
       cambiarPassword: (params: { id: number; password: string }) =>
         ipcRenderer.invoke('admin:usuarios:cambiarPassword', params)
     },

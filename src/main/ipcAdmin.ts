@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { cerrarDb, obtenerDb, rutaBaseDeDatos } from './db'
-import { requerirAdmin } from './auth'
+import { requerirAdmin, requerirSupervisorOAdmin } from './auth'
 import {
   exportarRespaldo,
   listarRespaldosAutomaticos,
@@ -84,7 +84,7 @@ export function registrarIpcAdmin(): void {
   })
 
   ipcMain.handle('admin:tarifas:obtenerActivaPorTipo', (_evento, tipoVehiculoId: number) => {
-    requerirAdmin()
+    requerirSupervisorOAdmin()
     return obtenerTarifaProgresivaActivaPorTipo(obtenerDb(), tipoVehiculoId)
   })
 
@@ -99,18 +99,20 @@ export function registrarIpcAdmin(): void {
         preciosPorBloque: number[]
       }
     ) => {
-      requerirAdmin()
+      requerirSupervisorOAdmin()
       return actualizarTarifaProgresiva(obtenerDb(), params)
     }
   )
 
   ipcMain.handle('admin:series:listar', (_evento, estacionamientoId: number) => {
-    requerirAdmin()
+    requerirSupervisorOAdmin()
     return listarSeries(obtenerDb(), estacionamientoId)
   })
 
+  // Proporción de reparto y activar/desactivar — no crear/eliminar series
+  // ni establecer el siguiente folio (ver requerirSupervisorOAdmin).
   ipcMain.handle('admin:series:actualizar', (_evento, params: { id: number; proporcion: number; activo: boolean }) => {
-    requerirAdmin()
+    requerirSupervisorOAdmin()
     actualizarSerie(obtenerDb(), params)
   })
 
@@ -165,7 +167,7 @@ export function registrarIpcAdmin(): void {
   )
 
   ipcMain.handle('admin:tarifasPlanas:listar', (_evento, estacionamientoId: number) => {
-    requerirAdmin()
+    requerirSupervisorOAdmin()
     return listarTarifasPlanas(obtenerDb(), estacionamientoId)
   })
 
@@ -175,7 +177,7 @@ export function registrarIpcAdmin(): void {
       _evento,
       params: { estacionamientoId: number; tipoVehiculoId: number; nombre: string; precioFijo: number; horasIncluidas: number }
     ) => {
-      requerirAdmin()
+      requerirSupervisorOAdmin()
       return crearTarifaPlana(obtenerDb(), params)
     }
   )
@@ -183,7 +185,7 @@ export function registrarIpcAdmin(): void {
   ipcMain.handle(
     'admin:tarifasPlanas:actualizar',
     (_evento, params: { id: number; nombre: string; activo: boolean }) => {
-      requerirAdmin()
+      requerirSupervisorOAdmin()
       actualizarTarifaPlana(obtenerDb(), params)
     }
   )
@@ -201,7 +203,7 @@ export function registrarIpcAdmin(): void {
         horasIncluidas: number
       }
     ) => {
-      requerirAdmin()
+      requerirSupervisorOAdmin()
       return cambiarPrecioTarifaPlana(obtenerDb(), params)
     }
   )
@@ -220,7 +222,7 @@ export function registrarIpcAdmin(): void {
         nombreUsuario: string
         password: string
         nombreCompleto: string
-        rol: 'admin' | 'empleado'
+        rol: 'admin' | 'supervisor' | 'empleado'
       }
     ) => {
       requerirAdmin()
@@ -230,7 +232,10 @@ export function registrarIpcAdmin(): void {
 
   ipcMain.handle(
     'admin:usuarios:actualizar',
-    (_evento, params: { id: number; nombreCompleto: string; rol: 'admin' | 'empleado'; activo: boolean }) => {
+    (
+      _evento,
+      params: { id: number; nombreCompleto: string; rol: 'admin' | 'supervisor' | 'empleado'; activo: boolean }
+    ) => {
       requerirAdmin()
       actualizarUsuario(obtenerDb(), params)
     }

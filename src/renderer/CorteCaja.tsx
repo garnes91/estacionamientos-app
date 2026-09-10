@@ -109,7 +109,7 @@ export function CorteCaja({
   onVolver
 }: {
   nombreUsuario: string
-  rol: 'admin' | 'empleado'
+  rol: 'admin' | 'supervisor' | 'empleado'
   onVolver: () => void
 }): ReactElement {
   const [estacionamientoId, setEstacionamientoId] = useState<number | null>(null)

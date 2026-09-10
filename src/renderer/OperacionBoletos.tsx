@@ -40,7 +40,7 @@ interface Resumen {
 export interface UsuarioSesion {
   id: number
   nombreCompleto: string
-  rol: 'admin' | 'empleado'
+  rol: 'admin' | 'supervisor' | 'empleado'
 }
 
 const TECLAS_TIPO: Record<string, number> = { F1: 0, F2: 1, F3: 2 }
@@ -436,12 +436,12 @@ export function OperacionBoletos({
           <button style={estiloBotonBarra} onClick={onVerGastos}>
             Gastos
           </button>
-          {!soloSerieA && usuario.rol === 'admin' && (
+          {!soloSerieA && (usuario.rol === 'admin' || usuario.rol === 'supervisor') && (
             <button style={estiloBotonBarra} onClick={onVerCorteMensual}>
               Corte mensual
             </button>
           )}
-          {!soloSerieA && usuario.rol === 'admin' && (
+          {!soloSerieA && (usuario.rol === 'admin' || usuario.rol === 'supervisor') && (
             <button style={estiloBotonBarra} onClick={onVerEstadisticas}>
               Estadísticas
             </button>

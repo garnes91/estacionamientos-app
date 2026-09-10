@@ -18,6 +18,12 @@ const TABS = [
 ] as const
 type Tab = (typeof TABS)[number]
 
+// Un supervisor solo ve estas tres — precios y reparto de series, nada de
+// usuarios, folios, config de infraestructura ni el umbral de recobro
+// sospechoso (ver requerirSupervisorOAdmin en src/main/auth.ts para el
+// razonamiento completo de por qué se trazó la línea justo aquí).
+const TABS_SUPERVISOR: Tab[] = ['tarifas', 'planas', 'series']
+
 const TAB_LABELS: Record<Tab, string> = {
   tipos: 'Tipos de vehículo',
   tarifas: 'Tarifas',
@@ -45,8 +51,11 @@ export function AdminConfig({
   onVolver: () => void
   onCerrarSesion: () => void
 }): ReactElement {
+  const esAdmin = usuario.rol === 'admin'
+  const tabsVisibles = esAdmin ? TABS : TABS_SUPERVISOR
+
   const [estacionamientoId, setEstacionamientoId] = useState<number | null>(null)
-  const [tab, setTab] = useState<Tab>('tipos')
+  const [tab, setTab] = useState<Tab>(esAdmin ? 'tipos' : 'tarifas')
   const [mensaje, setMensaje] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -90,7 +99,7 @@ export function AdminConfig({
       </div>
 
       <nav style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', margin: '1rem 0', borderBottom: '1px solid #ddd', paddingBottom: '0.5rem' }}>
-        {TABS.map((t) => (
+        {tabsVisibles.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -113,7 +122,9 @@ export function AdminConfig({
       {tab === 'planas' && (
         <TabTarifasPlanas estacionamientoId={estacionamientoId} avisar={avisar} avisarError={avisarError} />
       )}
-      {tab === 'series' && <TabSeries estacionamientoId={estacionamientoId} avisar={avisar} avisarError={avisarError} />}
+      {tab === 'series' && (
+        <TabSeries estacionamientoId={estacionamientoId} avisar={avisar} avisarError={avisarError} esAdmin={esAdmin} />
+      )}
       {tab === 'texto' && (
         <TabTextoBoleto estacionamientoId={estacionamientoId} avisar={avisar} avisarError={avisarError} />
       )}
@@ -579,7 +590,7 @@ interface SerieFolioAdmin {
   activo: boolean
 }
 
-function TabSeries({ estacionamientoId, avisar, avisarError }: TabProps): ReactElement {
+function TabSeries({ estacionamientoId, avisar, avisarError, esAdmin }: TabProps & { esAdmin: boolean }): ReactElement {
   const [series, setSeries] = useState<SerieFolioAdmin[]>([])
   const [nueva, setNueva] = useState({ serie: '', proporcion: 1 })
   const [proximoFolio, setProximoFolio] = useState<Record<number, string>>({})
@@ -662,8 +673,8 @@ function TabSeries({ estacionamientoId, avisar, avisarError }: TabProps): ReactE
             <th style={thStyle}>Emitidos</th>
             <th style={thStyle}>Activa</th>
             <th style={thStyle}></th>
-            <th style={thStyle}>Próximo folio</th>
-            <th style={thStyle}></th>
+            {esAdmin && <th style={thStyle}>Próximo folio</th>}
+            {esAdmin && <th style={thStyle}></th>}
           </tr>
         </thead>
         <tbody>
@@ -692,50 +703,63 @@ function TabSeries({ estacionamientoId, avisar, avisarError }: TabProps): ReactE
                 />
               </td>
               <td style={tdStyle}>
-                <button onClick={() => guardar(s)}>Guardar</button>{' '}
-                <button onClick={() => eliminar(s)}>Eliminar</button>
+                <button onClick={() => guardar(s)}>Guardar</button>
+                {esAdmin && (
+                  <>
+                    {' '}
+                    <button onClick={() => eliminar(s)}>Eliminar</button>
+                  </>
+                )}
               </td>
-              <td style={tdStyle}>
-                <input
-                  style={{ ...inputStyle, width: 80 }}
-                  type="number"
-                  min={1}
-                  value={proximoFolio[s.id] ?? ''}
-                  onChange={(e) => setProximoFolio((prev) => ({ ...prev, [s.id]: e.target.value }))}
-                />
-              </td>
-              <td style={tdStyle}>
-                <button onClick={() => reestablecerFolio(s)}>Reestablecer</button>
-              </td>
+              {esAdmin && (
+                <td style={tdStyle}>
+                  <input
+                    style={{ ...inputStyle, width: 80 }}
+                    type="number"
+                    min={1}
+                    value={proximoFolio[s.id] ?? ''}
+                    onChange={(e) => setProximoFolio((prev) => ({ ...prev, [s.id]: e.target.value }))}
+                  />
+                </td>
+              )}
+              {esAdmin && (
+                <td style={tdStyle}>
+                  <button onClick={() => reestablecerFolio(s)}>Reestablecer</button>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
       </table>
-      <p style={{ color: '#666', fontSize: '0.8rem' }}>
-        "Próximo folio" es el número que tendrá el siguiente boleto emitido de esa serie — úsalo para empatar la
-        numeración con un sistema o folio físico anterior. No se puede bajar por debajo de un folio ya usado en esta
-        serie.
-      </p>
+      {esAdmin && (
+        <>
+          <p style={{ color: '#666', fontSize: '0.8rem' }}>
+            "Próximo folio" es el número que tendrá el siguiente boleto emitido de esa serie — úsalo para empatar la
+            numeración con un sistema o folio físico anterior. No se puede bajar por debajo de un folio ya usado en
+            esta serie.
+          </p>
 
-      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
-        <input
-          style={{ ...inputStyle, width: 60 }}
-          placeholder="Letra"
-          maxLength={3}
-          value={nueva.serie}
-          onChange={(e) => setNueva({ ...nueva, serie: e.target.value.toUpperCase().replace(/[^A-Z]/g, '') })}
-        />
-        <input
-          style={{ ...inputStyle, width: 70 }}
-          type="number"
-          min={1}
-          value={nueva.proporcion}
-          onChange={(e) => setNueva({ ...nueva, proporcion: Number(e.target.value) })}
-        />
-        <button onClick={crear} disabled={!nueva.serie.trim()}>
-          Agregar serie
-        </button>
-      </div>
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+            <input
+              style={{ ...inputStyle, width: 60 }}
+              placeholder="Letra"
+              maxLength={3}
+              value={nueva.serie}
+              onChange={(e) => setNueva({ ...nueva, serie: e.target.value.toUpperCase().replace(/[^A-Z]/g, '') })}
+            />
+            <input
+              style={{ ...inputStyle, width: 70 }}
+              type="number"
+              min={1}
+              value={nueva.proporcion}
+              onChange={(e) => setNueva({ ...nueva, proporcion: Number(e.target.value) })}
+            />
+            <button onClick={crear} disabled={!nueva.serie.trim()}>
+              Agregar serie
+            </button>
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -875,7 +899,7 @@ interface UsuarioAdmin {
   id: number
   nombreUsuario: string
   nombreCompleto: string
-  rol: 'admin' | 'empleado'
+  rol: 'admin' | 'supervisor' | 'empleado'
   activo: boolean
 }
 
@@ -886,7 +910,7 @@ function TabUsuarios({ estacionamientoId, avisar, avisarError }: TabProps): Reac
     nombreUsuario: string
     password: string
     nombreCompleto: string
-    rol: 'admin' | 'empleado'
+    rol: 'admin' | 'supervisor' | 'empleado'
   }>({ nombreUsuario: '', password: '', nombreCompleto: '', rol: 'empleado' })
 
   async function cargar(): Promise<void> {
@@ -962,11 +986,14 @@ function TabUsuarios({ estacionamientoId, avisar, avisarError }: TabProps): Reac
                   value={u.rol}
                   onChange={(e) =>
                     setUsuarios((prev) =>
-                      prev.map((x) => (x.id === u.id ? { ...x, rol: e.target.value as 'admin' | 'empleado' } : x))
+                      prev.map((x) =>
+                        x.id === u.id ? { ...x, rol: e.target.value as 'admin' | 'supervisor' | 'empleado' } : x
+                      )
                     )
                   }
                 >
                   <option value="empleado">empleado</option>
+                  <option value="supervisor">supervisor</option>
                   <option value="admin">admin</option>
                 </select>
               </td>
@@ -1021,9 +1048,10 @@ function TabUsuarios({ estacionamientoId, avisar, avisarError }: TabProps): Reac
         />
         <select
           value={nuevo.rol}
-          onChange={(e) => setNuevo({ ...nuevo, rol: e.target.value as 'admin' | 'empleado' })}
+          onChange={(e) => setNuevo({ ...nuevo, rol: e.target.value as 'admin' | 'supervisor' | 'empleado' })}
         >
           <option value="empleado">empleado</option>
+          <option value="supervisor">supervisor</option>
           <option value="admin">admin</option>
         </select>
         <button onClick={crear}>Agregar usuario</button>

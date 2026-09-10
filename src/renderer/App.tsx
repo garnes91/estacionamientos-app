@@ -75,7 +75,7 @@ function App(): ReactElement {
     contenido = <div style={{ fontFamily: 'sans-serif', padding: '2rem' }}>Cargando…</div>
   } else if (usuario === null) {
     contenido = <Login onLogin={setUsuario} />
-  } else if (pantalla === 'admin' && usuario.rol === 'admin') {
+  } else if (pantalla === 'admin' && (usuario.rol === 'admin' || usuario.rol === 'supervisor')) {
     contenido = <AdminConfig usuario={usuario} onVolver={() => setPantalla('operacion')} onCerrarSesion={cerrarSesion} />
   } else if (pantalla === 'boletosAbiertos') {
     contenido = <BoletosAbiertos onVolver={() => setPantalla('operacion')} />
@@ -87,8 +87,9 @@ function App(): ReactElement {
     contenido = !corteMensualAutorizado ? (
       <ReautenticarCorte
         soloAdmin
-        titulo="Confirmar identidad de administrador"
-        mensaje="El corte mensual solo lo puede generar/imprimir un administrador — vuelve a introducir usuario y contraseña de una cuenta admin para continuar."
+        permitirSupervisor
+        titulo="Confirmar identidad"
+        mensaje="El corte mensual solo lo puede generar/imprimir un administrador o supervisor — vuelve a introducir usuario y contraseña para continuar."
         onVerificado={() => setCorteMensualAutorizado(true)}
         onCancelar={() => setPantalla('operacion')}
       />
@@ -99,8 +100,9 @@ function App(): ReactElement {
     contenido = !estadisticasAutorizadas ? (
       <ReautenticarCorte
         soloAdmin
-        titulo="Confirmar identidad de administrador"
-        mensaje="Las estadísticas solo las puede ver un administrador — vuelve a introducir usuario y contraseña de una cuenta admin para continuar."
+        permitirSupervisor
+        titulo="Confirmar identidad"
+        mensaje="Las estadísticas solo las puede ver un administrador o supervisor — vuelve a introducir usuario y contraseña para continuar."
         onVerificado={() => setEstadisticasAutorizadas(true)}
         onCancelar={() => setPantalla('operacion')}
       />
@@ -116,7 +118,9 @@ function App(): ReactElement {
       <OperacionBoletos
         usuario={usuario}
         onCerrarSesion={cerrarSesion}
-        onAbrirConfiguracion={usuario.rol === 'admin' ? () => setPantalla('admin') : undefined}
+        onAbrirConfiguracion={
+          usuario.rol === 'admin' || usuario.rol === 'supervisor' ? () => setPantalla('admin') : undefined
+        }
         onVerBoletosAbiertos={() => setPantalla('boletosAbiertos')}
         onVerCorte={() => setPantalla('corte')}
         onVerPensionados={() => setPantalla('pensionados')}

@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   nombre_usuario      TEXT NOT NULL,
   password_hash       TEXT NOT NULL,
   nombre_completo     TEXT NOT NULL,
-  rol                 TEXT NOT NULL CHECK (rol IN ('admin', 'empleado')),
+  rol                 TEXT NOT NULL CHECK (rol IN ('admin', 'supervisor', 'empleado')),
   activo              INTEGER NOT NULL DEFAULT 1 CHECK (activo IN (0, 1)),
   created_at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   UNIQUE (estacionamiento_id, nombre_usuario)

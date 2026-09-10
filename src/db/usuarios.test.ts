@@ -68,6 +68,18 @@ describe('crearUsuario', () => {
     expect(autenticar(db, estacionamientoId, 'juan', 'clave123')).toMatchObject({ nombreCompleto: 'Juan Pérez' })
   })
 
+  it('acepta el rol supervisor', () => {
+    crearUsuario(db, {
+      estacionamientoId,
+      nombreUsuario: 'sofia',
+      password: 'clave123',
+      nombreCompleto: 'Sofía Supervisora',
+      rol: 'supervisor'
+    })
+
+    expect(autenticar(db, estacionamientoId, 'sofia', 'clave123')).toMatchObject({ rol: 'supervisor' })
+  })
+
   it('rechaza un nombre de usuario duplicado con un mensaje claro', () => {
     expect(() =>
       crearUsuario(db, {

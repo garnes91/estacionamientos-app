@@ -1,7 +1,7 @@
 import type { DB } from './index'
 import { hashPassword, verifyPassword } from './passwordHash'
 
-export type Rol = 'admin' | 'empleado'
+export type Rol = 'admin' | 'supervisor' | 'empleado'
 
 export interface UsuarioBasico {
   id: number

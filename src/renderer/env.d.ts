@@ -47,7 +47,7 @@ interface BoletoCerradoApi {
 interface UsuarioApi {
   id: number
   nombreCompleto: string
-  rol: 'admin' | 'empleado'
+  rol: 'admin' | 'supervisor' | 'empleado'
 }
 
 interface TarifaProgresivaAdminApi {
@@ -78,7 +78,7 @@ interface UsuarioAdminApi {
   id: number
   nombreUsuario: string
   nombreCompleto: string
-  rol: 'admin' | 'empleado'
+  rol: 'admin' | 'supervisor' | 'empleado'
   activo: boolean
 }
 
@@ -527,12 +527,12 @@ declare global {
             nombreUsuario: string
             password: string
             nombreCompleto: string
-            rol: 'admin' | 'empleado'
+            rol: 'admin' | 'supervisor' | 'empleado'
           }) => Promise<UsuarioAdminApi>
           actualizar: (params: {
             id: number
             nombreCompleto: string
-            rol: 'admin' | 'empleado'
+            rol: 'admin' | 'supervisor' | 'empleado'
             activo: boolean
           }) => Promise<void>
           cambiarPassword: (params: { id: number; password: string }) => Promise<void>

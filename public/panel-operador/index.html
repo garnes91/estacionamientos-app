@@ -327,7 +327,7 @@
     getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut,
     sendPasswordResetEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider
   } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js'
-  import { getFirestore, doc, collection, query, where, onSnapshot, updateDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js'
+  import { getFirestore, doc, collection, query, where, onSnapshot, updateDoc, deleteDoc, addDoc } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js'
   import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js'
 
   // Mismo proyecto Firebase que portal-facturacion/index.html — la apiKey es
@@ -1088,6 +1088,90 @@
       construirFormulario(formActual)
     })
     elEditorContenido.appendChild(btnAgregarSerie)
+
+    const encabezadoUsuarios = document.createElement('h3')
+    encabezadoUsuarios.textContent = 'Usuarios'
+    elEditorContenido.appendChild(encabezadoUsuarios)
+    const notaUsuarios = document.createElement('p')
+    notaUsuarios.className = 'hint'
+    notaUsuarios.textContent = 'No se borran, solo se desactivan. Deja "Nueva contraseña" en blanco para no cambiarla.'
+    elEditorContenido.appendChild(notaUsuarios)
+
+    formActual.usuarios.forEach((usuario, i) => {
+      const tarjeta = document.createElement('div')
+      tarjeta.className = 'tarjeta'
+
+      const encabezadoFilaUsuario = document.createElement('div')
+      encabezadoFilaUsuario.className = 'tarjeta-encabezado'
+      const tituloUsuario = document.createElement('span')
+      tituloUsuario.className = 'hint'
+      tituloUsuario.textContent = usuario.id === null ? 'Nuevo — necesita contraseña para poder crearse' : ''
+      encabezadoFilaUsuario.appendChild(tituloUsuario)
+      tarjeta.appendChild(encabezadoFilaUsuario)
+
+      const fila = document.createElement('div')
+      fila.className = 'fila'
+
+      const colUsuario = document.createElement('div')
+      if (usuario.id === null) {
+        colUsuario.innerHTML = '<label>Usuario (para iniciar sesión)</label>'
+        colUsuario.appendChild(crearCampoTexto(usuario.nombreUsuario, (v) => (formActual.usuarios[i].nombreUsuario = v)))
+      } else {
+        colUsuario.innerHTML = `<label>Usuario</label><div style="padding:0.4rem 0; font-weight:600;">${usuario.nombreUsuario}</div>`
+      }
+
+      const colNombre = document.createElement('div')
+      colNombre.innerHTML = '<label>Nombre completo</label>'
+      colNombre.appendChild(crearCampoTexto(usuario.nombreCompleto, (v) => (formActual.usuarios[i].nombreCompleto = v)))
+
+      const colRol = document.createElement('div')
+      colRol.innerHTML = '<label>Rol</label>'
+      const selectRol = document.createElement('select')
+      ;['empleado', 'supervisor', 'admin'].forEach((valor) => {
+        const opcion = document.createElement('option')
+        opcion.value = valor
+        opcion.textContent = valor
+        if (usuario.rol === valor) opcion.selected = true
+        selectRol.appendChild(opcion)
+      })
+      selectRol.addEventListener('change', () => { formSucio = true; formActual.usuarios[i].rol = selectRol.value })
+      colRol.appendChild(selectRol)
+
+      const colActivo = document.createElement('div')
+      colActivo.className = 'checkbox-fila'
+      colActivo.innerHTML = '<label>Activo</label>'
+      colActivo.appendChild(crearCheckbox(usuario.activo, (v) => (formActual.usuarios[i].activo = v)))
+
+      const colPassword = document.createElement('div')
+      colPassword.innerHTML = usuario.id === null ? '<label>Contraseña</label>' : '<label>Nueva contraseña</label>'
+      colPassword.appendChild(
+        crearCampoTexto(usuario.passwordNueva ?? '', (v) => (formActual.usuarios[i].passwordNueva = v || null), 'password')
+      )
+
+      fila.appendChild(colUsuario)
+      fila.appendChild(colNombre)
+      fila.appendChild(colRol)
+      fila.appendChild(colActivo)
+      fila.appendChild(colPassword)
+      tarjeta.appendChild(fila)
+      elEditorContenido.appendChild(tarjeta)
+    })
+
+    const btnAgregarUsuario = document.createElement('button')
+    btnAgregarUsuario.textContent = '+ Agregar usuario'
+    btnAgregarUsuario.addEventListener('click', () => {
+      formActual.usuarios.push({
+        id: null,
+        nombreUsuario: '',
+        nombreCompleto: '',
+        rol: 'empleado',
+        activo: true,
+        passwordNueva: null
+      })
+      formSucio = true
+      construirFormulario(formActual)
+    })
+    elEditorContenido.appendChild(btnAgregarUsuario)
   }
 
   function formatearHora(fecha) {
@@ -1261,10 +1345,24 @@
   const elEstadisticasContenido = document.getElementById('estadisticas-contenido')
 
   let desuscribirEstadisticas = null
+  let desuscribirGastosInternos = null
+  let slugEstadisticasActual = null
+  let ultimoDatosEstadisticas = null
+  let gastosInternosActuales = null // null = todavía no llega / sin permiso; [] = llegó y está vacío
+  // Sin esto, un latido (llega cada ~60s) reconstruiría todo el panel a
+  // medio tecleo y borraría lo que la persona llevaba escrito en "agregar
+  // gasto interno" — mismo criterio que formSucio en Configuración.
+  let gastoInternoSucio = false
   const MESES_CORTOS_ESTADISTICAS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+  const CATEGORIAS_GASTO_INTERNO = ['operativo', 'nomina', 'servicios', 'otro']
 
   function mostrarListaEstadisticas() {
     if (desuscribirEstadisticas) { desuscribirEstadisticas(); desuscribirEstadisticas = null }
+    if (desuscribirGastosInternos) { desuscribirGastosInternos(); desuscribirGastosInternos = null }
+    slugEstadisticasActual = null
+    ultimoDatosEstadisticas = null
+    gastosInternosActuales = null
+    gastoInternoSucio = false
     elEditorEstadisticas.style.display = 'none'
     elListaEstadisticas.style.display = 'block'
   }
@@ -1287,9 +1385,155 @@
     return { texto: `${signo}${pct.toFixed(0)}%`, color: pct >= 0 ? 'var(--status-good)' : 'var(--status-critical)' }
   }
 
-  function renderizarEstadisticas(datos) {
+  function claveMes(anio, mes) {
+    return `${anio}-${String(mes).padStart(2, '0')}`
+  }
+
+  function gastosInternosDelMes(anio, mes) {
+    if (!gastosInternosActuales) return 0
+    return gastosInternosActuales
+      .filter((g) => (g.fecha || '').slice(0, 7) === claveMes(anio, mes))
+      .reduce((acc, g) => acc + Number(g.monto || 0), 0)
+  }
+
+  async function agregarGastoInterno(concepto, categoria, monto, fecha) {
+    await addDoc(collection(db, 'estacionamientos', slugEstadisticasActual, 'gastosInternos'), {
+      concepto, categoria, monto: Number(monto), fecha, creadoEn: new Date().toISOString()
+    })
+  }
+
+  async function eliminarGastoInterno(id) {
+    if (!confirm('¿Eliminar este gasto interno?')) return
+    await deleteDoc(doc(db, 'estacionamientos', slugEstadisticasActual, 'gastosInternos', id))
+  }
+
+  function renderizarGastosInternos(actual) {
+    const seccion = document.createElement('div')
+    seccion.className = 'tarjeta'
+    seccion.style.marginTop = '0.75rem'
+
+    if (gastosInternosActuales === null) {
+      seccion.innerHTML = '<h3 style="margin-top:0;">Gastos internos</h3><p class="hint">Sin acceso a los gastos internos de este estacionamiento.</p>'
+      elEstadisticasContenido.appendChild(seccion)
+      return
+    }
+
+    const totalDelMes = gastosInternosDelMes(actual.anio, actual.mes)
+    const netoReal = actual.resultadoNeto - totalDelMes
+
+    seccion.innerHTML = `
+      <h3 style="margin-top:0;">Gastos internos (privados — el operador de la caseta no los ve)</h3>
+      <p class="hint">Renta y otros gastos que solo tú administras — nunca tocan la base de datos de la caseta.
+        Resultado neto real de ${MESES_CORTOS_ESTADISTICAS[actual.mes - 1]} ${actual.anio}:
+        <strong style="color:${netoReal >= 0 ? 'var(--status-good)' : 'var(--status-critical)'};">${formatearMontoEstadisticas(netoReal)}</strong>
+        (${formatearMontoEstadisticas(actual.resultadoNeto)} del corte, menos ${formatearMontoEstadisticas(totalDelMes)} de gastos internos este mes).</p>
+    `
+
+    const lista = document.createElement('div')
+    if (gastosInternosActuales.length === 0) {
+      lista.innerHTML = '<p class="hint">Todavía no has registrado ningún gasto interno.</p>'
+    } else {
+      const tabla = document.createElement('table')
+      tabla.style.cssText = 'width:100%; border-collapse:collapse;'
+      tabla.innerHTML = `
+        <thead><tr style="text-align:left; border-bottom:1px solid var(--border);">
+          <th>Fecha</th><th>Concepto</th><th>Categoría</th><th style="text-align:right;">Monto</th><th></th>
+        </tr></thead>
+      `
+      const tbody = document.createElement('tbody')
+      const ordenados = [...gastosInternosActuales].sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''))
+      for (const g of ordenados) {
+        const fila = document.createElement('tr')
+        fila.style.borderBottom = '1px solid var(--border)'
+        fila.innerHTML = `
+          <td>${g.fecha ?? ''}</td><td>${g.concepto ?? ''}</td><td>${g.categoria ?? ''}</td>
+          <td style="text-align:right;">${formatearMontoEstadisticas(Number(g.monto || 0))}</td><td></td>
+        `
+        const btnEliminar = document.createElement('button')
+        btnEliminar.className = 'peligro'
+        btnEliminar.textContent = 'Eliminar'
+        btnEliminar.addEventListener('click', () => eliminarGastoInterno(g.id))
+        fila.lastElementChild.appendChild(btnEliminar)
+        tbody.appendChild(fila)
+      }
+      tabla.appendChild(tbody)
+      lista.appendChild(tabla)
+    }
+    seccion.appendChild(lista)
+
+    const form = document.createElement('div')
+    form.className = 'fila'
+    form.style.marginTop = '0.75rem'
+
+    const colConcepto = document.createElement('div')
+    colConcepto.innerHTML = '<label>Concepto</label>'
+    const inputConcepto = document.createElement('input')
+    inputConcepto.type = 'text'
+    inputConcepto.placeholder = 'Renta de octubre'
+    inputConcepto.addEventListener('input', () => { gastoInternoSucio = true })
+    colConcepto.appendChild(inputConcepto)
+
+    const colCategoria = document.createElement('div')
+    colCategoria.innerHTML = '<label>Categoría</label>'
+    const selectCategoria = document.createElement('select')
+    CATEGORIAS_GASTO_INTERNO.forEach((c) => {
+      const opcion = document.createElement('option')
+      opcion.value = c
+      opcion.textContent = c
+      selectCategoria.appendChild(opcion)
+    })
+    colCategoria.appendChild(selectCategoria)
+
+    const colMonto = document.createElement('div')
+    colMonto.innerHTML = '<label>Monto</label>'
+    const inputMonto = document.createElement('input')
+    inputMonto.type = 'number'
+    inputMonto.min = '0'
+    inputMonto.addEventListener('input', () => { gastoInternoSucio = true })
+    colMonto.appendChild(inputMonto)
+
+    const colFecha = document.createElement('div')
+    colFecha.innerHTML = '<label>Fecha</label>'
+    const inputFecha = document.createElement('input')
+    inputFecha.type = 'date'
+    inputFecha.value = new Date().toISOString().slice(0, 10)
+    colFecha.appendChild(inputFecha)
+
+    const colBoton = document.createElement('div')
+    colBoton.style.cssText = 'display:flex; align-items:flex-end;'
+    const btnAgregar = document.createElement('button')
+    btnAgregar.className = 'primario'
+    btnAgregar.textContent = '+ Agregar'
+    btnAgregar.addEventListener('click', async () => {
+      if (!inputConcepto.value.trim() || !inputMonto.value) return
+      btnAgregar.disabled = true
+      try {
+        await agregarGastoInterno(inputConcepto.value.trim(), selectCategoria.value, inputMonto.value, inputFecha.value)
+        inputConcepto.value = ''
+        inputMonto.value = ''
+        gastoInternoSucio = false
+        renderizarEstadisticas()
+      } finally {
+        btnAgregar.disabled = false
+      }
+    })
+    colBoton.appendChild(btnAgregar)
+
+    form.appendChild(colConcepto)
+    form.appendChild(colCategoria)
+    form.appendChild(colMonto)
+    form.appendChild(colFecha)
+    form.appendChild(colBoton)
+    seccion.appendChild(form)
+
+    elEstadisticasContenido.appendChild(seccion)
+  }
+
+  function renderizarEstadisticas() {
+    if (gastoInternoSucio) return // no reconstruir a medio tecleo del formulario de gasto interno
     elEstadisticasContenido.innerHTML = ''
-    const meses = datos.estadisticasMensuales
+    const datos = ultimoDatosEstadisticas
+    const meses = datos?.estadisticasMensuales
     if (!meses || meses.length === 0) {
       elEstadisticasContenido.innerHTML = '<p class="hint">Este estacionamiento todavía no ha subido estadísticas — espera a su próximo corte de turno.</p>'
       return
@@ -1356,21 +1600,43 @@
       </table>
     `
     elEstadisticasContenido.appendChild(tablaMeses)
+
+    renderizarGastosInternos(actual)
   }
 
   function abrirEstadisticas(slug) {
+    slugEstadisticasActual = slug
     elListaEstadisticas.style.display = 'none'
     elEditorEstadisticas.style.display = 'block'
     elEstadisticasTitulo.textContent = 'Cargando…'
     elEstadisticasContenido.innerHTML = ''
+    ultimoDatosEstadisticas = null
+    gastosInternosActuales = null
+    gastoInternoSucio = false
 
     if (desuscribirEstadisticas) desuscribirEstadisticas()
     desuscribirEstadisticas = onSnapshot(doc(db, 'estacionamientos', slug), (docSnap) => {
       if (!docSnap.exists()) return
       const datos = docSnap.data()
       elEstadisticasTitulo.textContent = datos.nombre ?? slug
-      renderizarEstadisticas(datos)
+      ultimoDatosEstadisticas = datos
+      renderizarEstadisticas()
     })
+
+    if (desuscribirGastosInternos) desuscribirGastosInternos()
+    desuscribirGastosInternos = onSnapshot(
+      collection(db, 'estacionamientos', slug, 'gastosInternos'),
+      (snapshot) => {
+        gastosInternosActuales = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))
+        renderizarEstadisticas()
+      },
+      () => {
+        // Sin permiso (no eres el dueño de este estacionamiento) — se
+        // oculta la sección en vez de mostrar un error.
+        gastosInternosActuales = null
+        renderizarEstadisticas()
+      }
+    )
   }
 
   // ================= Administración (solo super admin) =================

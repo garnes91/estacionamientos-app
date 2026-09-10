@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { abrirDb, DB } from './index'
 import { sembrarSiVacio } from './seed'
 import { obtenerEstacionamientoActual } from './estacionamientos'
-import { obtenerUsuarioPorDefecto } from './usuarios'
+import { autenticar, obtenerUsuarioPorDefecto } from './usuarios'
 import { listarTiposVehiculoAdmin } from './tiposVehiculo'
 import { obtenerTarifaProgresivaActivaPorTipo } from './tarifas'
 import { crearTarifaPlana, listarTarifasPlanas } from './tarifasPlanas'
@@ -135,7 +135,10 @@ describe('aplicarConfigSincronizable', () => {
       umbralRecobroSospechoso: 2,
       tiposVehiculo: [{ id: 999999, nombre: 'Fantasma', activo: true, tarifaMaximaDiaria: 10, preciosPorBloque: [] }],
       tarifasPlanas: [{ id: 999999, tipoVehiculoId: tipoAutoId, nombre: 'Fantasma', precioFijo: 1, horasIncluidas: 1, activo: true }],
-      series: [{ id: 999999, serie: 'Z', proporcion: 1, activo: true, siguienteNumero: 1 }]
+      series: [{ id: 999999, serie: 'Z', proporcion: 1, activo: true, siguienteNumero: 1 }],
+      usuarios: [
+        { id: 999999, nombreUsuario: 'fantasma', nombreCompleto: 'Fantasma', rol: 'empleado', activo: true, passwordNueva: null }
+      ]
     }
 
     const { errores } = aplicarConfigSincronizable(db, estacionamientoId, config)
@@ -281,5 +284,67 @@ describe('aplicarConfigSincronizable', () => {
     expect(errores).toHaveLength(1)
     const series = listarSeries(db, estacionamientoId)
     expect(series.some((s) => s.serie === 'D')).toBe(true)
+  })
+
+  it('crea un usuario nuevo con su contraseña, y puede autenticarse de inmediato', () => {
+    const config = construirConfigSincronizable(db, estacionamientoId)
+    config.usuarios.push({
+      id: null,
+      nombreUsuario: 'sofia',
+      nombreCompleto: 'Sofía Supervisora',
+      rol: 'supervisor',
+      activo: true,
+      passwordNueva: 'clave123'
+    })
+
+    const { errores } = aplicarConfigSincronizable(db, estacionamientoId, config)
+
+    expect(errores).toEqual([])
+    expect(autenticar(db, estacionamientoId, 'sofia', 'clave123')).toMatchObject({ rol: 'supervisor' })
+  })
+
+  it('rechaza crear un usuario sin contraseña, sin tumbar el resto de los cambios pendientes', () => {
+    const config = construirConfigSincronizable(db, estacionamientoId)
+    config.nombre = 'Sí se aplica'
+    config.usuarios.push({
+      id: null,
+      nombreUsuario: 'sinclave',
+      nombreCompleto: 'Sin Clave',
+      rol: 'empleado',
+      activo: true,
+      passwordNueva: null
+    })
+
+    const { errores } = aplicarConfigSincronizable(db, estacionamientoId, config)
+
+    expect(errores).toEqual(['Usuario "sinclave": un usuario nuevo necesita contraseña'])
+    expect(obtenerEstacionamientoActual(db).nombre).toBe('Sí se aplica')
+    expect(autenticar(db, estacionamientoId, 'sinclave', '')).toBeNull()
+  })
+
+  it('cambia rol/activo de un usuario existente sin tocar su contraseña si no se manda una nueva', () => {
+    const config = construirConfigSincronizable(db, estacionamientoId)
+    const empleado = config.usuarios.find((u) => u.nombreUsuario === 'empleado')!
+    empleado.rol = 'supervisor'
+
+    aplicarConfigSincronizable(db, estacionamientoId, config)
+
+    expect(autenticar(db, estacionamientoId, 'empleado', 'empleado')).toMatchObject({ rol: 'supervisor' })
+  })
+
+  it('resetea la contraseña de un usuario existente cuando el panel manda una nueva', () => {
+    const config = construirConfigSincronizable(db, estacionamientoId)
+    const empleado = config.usuarios.find((u) => u.nombreUsuario === 'empleado')!
+    empleado.passwordNueva = 'nuevaClaveRemota'
+
+    aplicarConfigSincronizable(db, estacionamientoId, config)
+
+    expect(autenticar(db, estacionamientoId, 'empleado', 'empleado')).toBeNull()
+    expect(autenticar(db, estacionamientoId, 'empleado', 'nuevaClaveRemota')).not.toBeNull()
+  })
+
+  it('construirConfigSincronizable nunca trae contraseñas de vuelta', () => {
+    const config = construirConfigSincronizable(db, estacionamientoId)
+    expect(config.usuarios.every((u) => u.passwordNueva === null)).toBe(true)
   })
 })

@@ -10,6 +10,7 @@ import { listarTiposVehiculoAdmin, actualizarTipoVehiculo, crearTipoVehiculo, el
 import { obtenerTarifaProgresivaActivaPorTipo, actualizarTarifaProgresiva } from './tarifas'
 import { listarTarifasPlanas, actualizarTarifaPlana, cambiarPrecioTarifaPlana, crearTarifaPlana } from './tarifasPlanas'
 import { listarSeries, actualizarSerie, establecerSiguienteNumero, crearSerie, eliminarSerie } from './series'
+import { listarUsuarios, crearUsuario, actualizarUsuario, cambiarPassword, Rol } from './usuarios'
 
 // id: null significa "crear esta entidad nueva" — se usa en vez de inferir
 // altas/bajas comparando arreglos, ver el comentario de aplicarConfigSincronizable.
@@ -41,6 +42,23 @@ export interface ConfigSerieSync {
   eliminar?: boolean
 }
 
+// nombreUsuario solo se usa al crear (id: null) — no se puede cambiar
+// después, igual que en la app local. passwordNueva viaja en texto plano
+// SOLO cuando el panel remoto la está fijando (creación o reseteo
+// explícito); construirConfigSincronizable nunca la llena de vuelta hacia
+// arriba, así que una contraseña real nunca sale de la base local salvo
+// que alguien la escriba a propósito en el formulario remoto. No hay
+// "eliminar" — igual que en la app local, un usuario se desactiva
+// (activo: false), nunca se borra.
+export interface ConfigUsuarioSync {
+  id: number | null
+  nombreUsuario: string
+  nombreCompleto: string
+  rol: Rol
+  activo: boolean
+  passwordNueva: string | null
+}
+
 export interface ConfigSincronizable {
   nombre: string
   textoBoleto: string | null
@@ -49,6 +67,7 @@ export interface ConfigSincronizable {
   tiposVehiculo: ConfigTipoVehiculoSync[]
   tarifasPlanas: ConfigTarifaPlanaSync[]
   series: ConfigSerieSync[]
+  usuarios: ConfigUsuarioSync[]
 }
 
 /**
@@ -79,6 +98,14 @@ export function construirConfigSincronizable(db: DB, estacionamientoId: number):
     activo: s.activo,
     siguienteNumero: s.siguienteNumero
   }))
+  const usuarios = listarUsuarios(db, estacionamientoId).map((u) => ({
+    id: u.id,
+    nombreUsuario: u.nombreUsuario,
+    nombreCompleto: u.nombreCompleto,
+    rol: u.rol,
+    activo: u.activo,
+    passwordNueva: null
+  }))
 
   return {
     nombre: estacionamiento.nombre,
@@ -87,7 +114,8 @@ export function construirConfigSincronizable(db: DB, estacionamientoId: number):
     umbralRecobroSospechoso: estacionamiento.umbralRecobroSospechoso,
     tiposVehiculo,
     tarifasPlanas,
-    series
+    series,
+    usuarios
   }
 }
 
@@ -268,6 +296,44 @@ export function aplicarConfigSincronizable(
       // El panel pudo haber mandado un número que ya no aplica (folios
       // emitidos localmente después de que se armó el snapshot remoto) —
       // se ignora en vez de tumbar el resto de los cambios pendientes.
+    }
+  }
+
+  // ---- Usuarios ----
+  for (const u of config.usuarios) {
+    if (u.id !== null) continue
+    try {
+      if (!u.passwordNueva) {
+        throw new Error('un usuario nuevo necesita contraseña')
+      }
+      crearUsuario(db, {
+        estacionamientoId,
+        nombreUsuario: u.nombreUsuario,
+        password: u.passwordNueva,
+        nombreCompleto: u.nombreCompleto,
+        rol: u.rol
+      })
+    } catch (error) {
+      errores.push(`Usuario "${u.nombreUsuario}": ${mensajeError(error)}`)
+    }
+  }
+
+  const usuariosActuales = listarUsuarios(db, estacionamientoId)
+  for (const u of config.usuarios) {
+    if (u.id === null) continue
+    const actual = usuariosActuales.find((x) => x.id === u.id)
+    if (!actual) continue
+
+    if (actual.nombreCompleto !== u.nombreCompleto || actual.rol !== u.rol || actual.activo !== u.activo) {
+      actualizarUsuario(db, { id: u.id, nombreCompleto: u.nombreCompleto, rol: u.rol, activo: u.activo })
+    }
+
+    if (u.passwordNueva) {
+      try {
+        cambiarPassword(db, u.id, u.passwordNueva)
+      } catch (error) {
+        errores.push(`Contraseña de "${actual.nombreUsuario}": ${mensajeError(error)}`)
+      }
     }
   }
 

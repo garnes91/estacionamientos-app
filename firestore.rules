@@ -21,11 +21,26 @@ service cloud.firestore {
     }
 
     match /estacionamientos/{slug} {
-      // get/create/update de un doc conocido por su slug: cualquier sesión
-      // autenticada, incluida la anónima — es el camino que usa la app de
-      // escritorio (heartbeat.ts) para su latido/config. Sin cambios de
-      // superficie respecto a como funcionaba antes de "socios".
-      allow get, create, update: if request.auth != null;
+      allow get, create: if request.auth != null;
+
+      // update: cualquier sesión autenticada, incluida la anónima — es el
+      // camino que usa la app de escritorio (heartbeat.ts) para su
+      // latido/config — CON UNA EXCEPCIÓN: fijar un configPendiente nuevo
+      // (no null) exige una sesión no anónima del dueño o el super admin.
+      // configPendiente puede llevar una contraseña nueva de usuario en
+      // texto plano (ver ConfigUsuarioSync en configSincronizacion.ts) —
+      // dejar que cualquiera con la apiKey pública (nunca secreta, viaja
+      // dentro de la app) la escriba sería un salto de "puede adivinar el
+      // slug y trastear tarifas" a "puede robarse el login de admin
+      // completo de esa instalación". La app de escritorio (sesión
+      // anónima) solo necesita poder LIMPIARLO (ponerlo en null) después
+      // de aplicarlo — eso sigue permitido para cualquier sesión.
+      allow update: if request.auth != null && (
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['configPendiente']) ||
+        request.resource.data.configPendiente == null ||
+        esSuperAdmin() ||
+        (request.auth.token.firebase.sign_in_provider != 'anonymous' && resource.data.ownerUid == request.auth.uid)
+      );
 
       // delete: solo el super admin (botón "Eliminar" en la pestaña
       // Administración) — antes quedaba cubierto por el "write" de arriba,
@@ -69,6 +84,20 @@ service cloud.firestore {
             get(/databases/$(database)/documents/estacionamientos/$(slug)).data.ownerUid == request.auth.uid
           );
         allow delete: if esSuperAdmin();
+      }
+
+      // Gastos "internos" del dueño (renta, etc.) que el operador de la
+      // caseta NO debe ver — a propósito nunca los toca la app de
+      // escritorio (siempre se autentica de forma anónima), solo el dueño
+      // real de este estacionamiento o el super admin. Viven aparte de
+      // estadisticasMensuales (que sí sube la app) — el portal los resta
+      // encima al mostrar el resultado neto.
+      match /gastosInternos/{gastoId} {
+        allow read, write: if request.auth != null &&
+          request.auth.token.firebase.sign_in_provider != 'anonymous' && (
+            esSuperAdmin() ||
+            get(/databases/$(database)/documents/estacionamientos/$(slug)).data.ownerUid == request.auth.uid
+          );
       }
     }
 

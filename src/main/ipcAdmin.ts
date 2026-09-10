@@ -289,15 +289,17 @@ export function registrarIpcAdmin(): void {
     }
   )
 
+  // Supervisor también puede resolver un fallo de impresora sin necesitar
+  // al admin — no es información sensible ni una palanca de fraude.
   ipcMain.handle('admin:impresion:obtener', (_evento, estacionamientoId: number) => {
-    requerirAdmin()
+    requerirSupervisorOAdmin()
     return obtenerConfiguracionImpresion(obtenerDb(), estacionamientoId)
   })
 
   ipcMain.handle(
     'admin:impresion:guardar',
     (_evento, params: { estacionamientoId: number; config: ConfiguracionImpresion }) => {
-      requerirAdmin()
+      requerirSupervisorOAdmin()
       guardarConfiguracionImpresion(obtenerDb(), params.estacionamientoId, params.config)
     }
   )
@@ -305,7 +307,7 @@ export function registrarIpcAdmin(): void {
   // Lista los nombres de impresora que Windows/el sistema reconoce, para
   // elegir de un desplegable en vez de tener que escribir el nombre exacto.
   ipcMain.handle('admin:impresion:listarImpresoras', async () => {
-    requerirAdmin()
+    requerirSupervisorOAdmin()
     const ventana = new BrowserWindow({ show: false })
     try {
       await ventana.loadURL('data:text/html,<html></html>')
@@ -320,7 +322,7 @@ export function registrarIpcAdmin(): void {
   // crudo (ESC/POS, ver src/main/escposUsb.ts), que no usa colas de
   // impresión de Windows sino que le habla directo al dispositivo.
   ipcMain.handle('admin:impresion:listarImpresorasUsb', () => {
-    requerirAdmin()
+    requerirSupervisorOAdmin()
     return listarImpresorasUsb()
   })
 

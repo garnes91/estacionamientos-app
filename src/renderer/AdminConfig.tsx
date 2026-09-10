@@ -22,7 +22,7 @@ type Tab = (typeof TABS)[number]
 // usuarios, folios, config de infraestructura ni el umbral de recobro
 // sospechoso (ver requerirSupervisorOAdmin en src/main/auth.ts para el
 // razonamiento completo de por qué se trazó la línea justo aquí).
-const TABS_SUPERVISOR: Tab[] = ['tarifas', 'planas', 'series']
+const TABS_SUPERVISOR: Tab[] = ['tarifas', 'planas', 'series', 'impresion']
 
 const TAB_LABELS: Record<Tab, string> = {
   tipos: 'Tipos de vehículo',

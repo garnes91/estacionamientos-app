@@ -1575,6 +1575,7 @@
     `
     elEstadisticasContenido.appendChild(resumen)
 
+    const conGastosInternos = gastosInternosActuales !== null
     const tablaMeses = document.createElement('div')
     tablaMeses.className = 'tarjeta'
     tablaMeses.style.marginTop = '0.75rem'
@@ -1583,10 +1584,14 @@
         <thead>
           <tr style="text-align:right; border-bottom:1px solid var(--border);">
             <th style="text-align:left;">Mes</th><th>Ingresos</th><th>Egresos</th><th>Resultado neto</th>
+            ${conGastosInternos ? '<th>Gastos internos</th><th>Resultado neto real</th>' : ''}
           </tr>
         </thead>
         <tbody>
-          ${[...meses].reverse().map((m) => `
+          ${[...meses].reverse().map((m) => {
+            const internos = conGastosInternos ? gastosInternosDelMes(m.anio, m.mes) : 0
+            const netoReal = m.resultadoNeto - internos
+            return `
             <tr style="border-bottom:1px solid var(--border);">
               <td>${MESES_CORTOS_ESTADISTICAS[m.mes - 1]} ${m.anio}</td>
               <td style="text-align:right;">${formatearMontoEstadisticas(m.ingresos)}</td>
@@ -1594,8 +1599,16 @@
               <td style="text-align:right; font-weight:600; color:${m.resultadoNeto >= 0 ? 'var(--status-good)' : 'var(--status-critical)'};">
                 ${formatearMontoEstadisticas(m.resultadoNeto)}
               </td>
-            </tr>
-          `).join('')}
+              ${
+                conGastosInternos
+                  ? `<td style="text-align:right;">${formatearMontoEstadisticas(internos)}</td>
+                     <td style="text-align:right; font-weight:600; color:${netoReal >= 0 ? 'var(--status-good)' : 'var(--status-critical)'};">
+                       ${formatearMontoEstadisticas(netoReal)}
+                     </td>`
+                  : ''
+              }
+            </tr>`
+          }).join('')}
         </tbody>
       </table>
     `

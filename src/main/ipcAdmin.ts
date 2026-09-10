@@ -52,8 +52,12 @@ import { listarImpresorasUsb } from './escposUsb'
 
 /** Canales IPC exclusivos de la pantalla de configuración: todos exigen sesión de admin. */
 export function registrarIpcAdmin(): void {
+  // Solo lectura: la necesitan Tarifas/Tarifa plana/Series (para mostrar el
+  // nombre de cada tipo), a las que un supervisor sí tiene acceso — crear,
+  // editar, reordenar y eliminar tipos de vehículo abajo siguen siendo
+  // solo de admin.
   ipcMain.handle('admin:tiposVehiculo:listar', (_evento, estacionamientoId: number) => {
-    requerirAdmin()
+    requerirSupervisorOAdmin()
     return listarTiposVehiculoAdmin(obtenerDb(), estacionamientoId)
   })
 

@@ -1,5 +1,7 @@
 import type { ReactElement } from 'react'
 import { formatearFolio } from '../logic/folioBarcode'
+import { urlFacturacion } from '../logic/urlFacturacion'
+import { CodigoQR } from './CodigoQR'
 
 export interface DatosReciboCobro {
   estacionamientoNombre: string
@@ -20,7 +22,17 @@ export interface DatosReciboCobro {
  * reclamo. Se imprime igual que el boleto de entrada (outerHTML de este
  * elemento vía src/main/print.ts).
  */
-export function ReciboCobro({ datos, claveFolio }: { datos: DatosReciboCobro; claveFolio: string }): ReactElement {
+export function ReciboCobro({
+  datos,
+  claveFolio,
+  slugFacturacion
+}: {
+  datos: DatosReciboCobro
+  claveFolio: string
+  // null si facturación no está habilitada o no hay proyecto Firebase
+  // configurado — en ese caso no tiene caso imprimir un QR que no sirve.
+  slugFacturacion: string | null
+}): ReactElement {
   const textoFolio = formatearFolio(datos.serie, datos.folio, claveFolio)
   const recargoBoletoPerdido = datos.recargoBoletoPerdido ?? 0
   // El desglose por tiempo/tarifa plana es siempre sobre el cálculo normal —
@@ -55,6 +67,12 @@ export function ReciboCobro({ datos, claveFolio }: { datos: DatosReciboCobro; cl
       {recargoBoletoPerdido ? <div>Recargo boleto perdido: ${recargoBoletoPerdido.toFixed(2)}</div> : null}
       <hr />
       <div style={{ fontWeight: 'bold', textAlign: 'right' }}>Total: ${datos.monto.toFixed(2)}</div>
+      {slugFacturacion && (
+        <div style={{ marginTop: '0.5rem' }}>
+          <CodigoQR texto={urlFacturacion(slugFacturacion, textoFolio)} />
+          <div style={{ textAlign: 'center', fontSize: 10 }}>Escanea para facturar</div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,4 +1,6 @@
 import type { ReactElement } from 'react'
+import { urlFacturacion } from '../logic/urlFacturacion'
+import { CodigoQR } from './CodigoQR'
 
 export type TipoTicketPensionado = 'alta' | 'baja' | 'pago'
 
@@ -18,6 +20,9 @@ export interface DatosTicketPensionado {
   // Pago: código de autofacturación de ESTE pago (solo si facturación está
   // habilitada) — ver src/logic/folioBarcode.ts, formatearCodigoPago.
   codigoFactura?: string
+  // Slug de "Monitoreo en la nube" — con esto y codigoFactura se imprime
+  // un QR al portal de autofacturación (ver urlFacturacion.ts).
+  slugFacturacion?: string | null
 }
 
 const TITULOS: Record<TipoTicketPensionado, string> = {
@@ -56,7 +61,17 @@ export function PensionadoTicket({ datos }: { datos: DatosTicketPensionado }): R
             {new Date(datos.periodoHasta!).toLocaleDateString('es-MX')}
           </div>
           <div style={{ fontWeight: 'bold' }}>Monto pagado: ${datos.monto!.toFixed(2)}</div>
-          {datos.codigoFactura && <div>Código de factura: {datos.codigoFactura}</div>}
+          {datos.codigoFactura && (
+            <>
+              <div>Código de factura: {datos.codigoFactura}</div>
+              {datos.slugFacturacion && (
+                <div style={{ marginTop: '0.5rem' }}>
+                  <CodigoQR texto={urlFacturacion(datos.slugFacturacion, datos.codigoFactura)} />
+                  <div style={{ textAlign: 'center', fontSize: 10 }}>Escanea para facturar</div>
+                </div>
+              )}
+            </>
+          )}
         </>
       )}
       <hr />

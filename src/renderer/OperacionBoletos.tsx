@@ -74,6 +74,7 @@ export function OperacionBoletos({
   const [nombreEstacionamiento, setNombreEstacionamiento] = useState('')
   const [textoBoleto, setTextoBoleto] = useState<string | null>(null)
   const [claveFolio, setClaveFolio] = useState('')
+  const [slugFacturacion, setSlugFacturacion] = useState<string | null>(null)
   const [tipos, setTipos] = useState<TipoVehiculo[]>([])
   const [tarifasPlanas, setTarifasPlanas] = useState<TarifaPlana[]>([])
   const [placa, setPlaca] = useState('')
@@ -109,6 +110,7 @@ export function OperacionBoletos({
       setNombreEstacionamiento(estacionamiento.nombre)
       setTextoBoleto(estacionamiento.textoBoleto)
       setClaveFolio(estacionamiento.claveFolio)
+      setSlugFacturacion(estacionamiento.slugFacturacion)
 
       const tiposVehiculo = await window.api.listarTiposVehiculo(estacionamiento.id)
       setTipos(tiposVehiculo)
@@ -251,7 +253,7 @@ export function OperacionBoletos({
       await window.api.imprimir({
         html: elemento.outerHTML,
         tipo: 'ticket',
-        datosTicket: { variante: 'cobro', claveFolio, datos: ultimoCobro }
+        datosTicket: { variante: 'cobro', claveFolio, datos: { ...ultimoCobro, slugFacturacion } }
       })
     } catch (e) {
       setError(limpiarError(e))
@@ -549,7 +551,7 @@ export function OperacionBoletos({
         </div>
         {ultimoCobro ? (
           <div style={{ border: '1px solid #e2e0da', borderRadius: 8, padding: '1rem', boxSizing: 'border-box' }}>
-            <ReciboCobro datos={ultimoCobro} claveFolio={claveFolio} />
+            <ReciboCobro datos={ultimoCobro} claveFolio={claveFolio} slugFacturacion={slugFacturacion} />
           </div>
         ) : (
           <div

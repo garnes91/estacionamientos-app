@@ -20,6 +20,7 @@ export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactEl
   const [textoBoleto, setTextoBoleto] = useState<string | null>(null)
   const [cargoBoletoPerdido, setCargoBoletoPerdido] = useState(0)
   const [claveFolio, setClaveFolio] = useState('')
+  const [slugFacturacion, setSlugFacturacion] = useState<string | null>(null)
   const [boletos, setBoletos] = useState<BoletoListado[]>([])
   const [cobrandoId, setCobrandoId] = useState<number | null>(null)
   const [ultimoCobro, setUltimoCobro] = useState<DatosReciboCobro | null>(null)
@@ -39,6 +40,7 @@ export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactEl
       setTextoBoleto(e.textoBoleto)
       setCargoBoletoPerdido(e.cargoBoletoPerdido)
       setClaveFolio(e.claveFolio)
+      setSlugFacturacion(e.slugFacturacion)
       cargar(e.id).catch((err) => setError(String(err)))
     })
   }, [])
@@ -50,7 +52,7 @@ export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactEl
       await window.api.imprimir({
         html: elemento.outerHTML,
         tipo: 'ticket',
-        datosTicket: { variante: 'cobro', claveFolio, datos: ultimoCobro }
+        datosTicket: { variante: 'cobro', claveFolio, datos: { ...ultimoCobro, slugFacturacion } }
       })
     } catch (e) {
       setError(String(e))
@@ -156,7 +158,7 @@ export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactEl
         </div>
         {ultimoCobro ? (
           <div style={{ border: '1px solid #e2e0da', borderRadius: 8, padding: '1rem', boxSizing: 'border-box' }}>
-            <ReciboCobro datos={ultimoCobro} claveFolio={claveFolio} />
+            <ReciboCobro datos={ultimoCobro} claveFolio={claveFolio} slugFacturacion={slugFacturacion} />
           </div>
         ) : (
           <div

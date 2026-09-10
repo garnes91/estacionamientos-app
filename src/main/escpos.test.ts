@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import iconv from 'iconv-lite'
 import { formatearFolio } from '../logic/folioBarcode'
+import { urlFacturacion } from '../logic/urlFacturacion'
 import {
   construirReporteCorte,
   construirReporteCorteMensual,
@@ -141,6 +142,27 @@ describe('construirTicketCobro', () => {
     // texto original tiene algo que la tabla CP850 no puede representar.
     expect(buffer.includes(Buffer.from([0x3f]))).toBe(false)
   })
+
+  it('sin slugFacturacion, no imprime QR ni la leyenda de facturar', () => {
+    const buffer = construirTicketCobro(datosBase, CLAVE_FOLIO)
+    expect(buffer.indexOf(iconv.encode('Escanea para facturar', 'cp850'))).toBe(-1)
+  })
+
+  it('con slugFacturacion, imprime el QR (GS ( k, guarda datos con la URL) y la leyenda', () => {
+    const buffer = construirTicketCobro({ ...datosBase, slugFacturacion: 'centro' }, CLAVE_FOLIO)
+    const textoFolio = formatearFolio(datosBase.serie, datosBase.folio, CLAVE_FOLIO)
+    const url = urlFacturacion('centro', textoFolio)
+
+    // GS ( k pL pH 31 50 30 <url> — fn 80, guarda los datos del símbolo.
+    const bytesUrl = Buffer.from(url, 'utf8')
+    const cuerpo = Buffer.concat([Buffer.from([0x31, 0x50, 0x30]), bytesUrl])
+    const comandoGuardarDatos = Buffer.concat([
+      Buffer.from([0x1d, 0x28, 0x6b, cuerpo.length & 0xff, (cuerpo.length >> 8) & 0xff]),
+      cuerpo
+    ])
+    expect(buffer.indexOf(comandoGuardarDatos)).toBeGreaterThanOrEqual(0)
+    expect(buffer.indexOf(iconv.encode('Escanea para facturar', 'cp850'))).toBeGreaterThanOrEqual(0)
+  })
 })
 
 describe('construirTicketPensionado', () => {
@@ -176,6 +198,24 @@ describe('construirTicketPensionado', () => {
   it('sin placa, muestra un guion (no el guion largo, sale como "?" en CP850)', () => {
     const buffer = construirTicketPensionado({ ...datosBase, placa: null })
     expect(buffer.indexOf(iconv.encode('Placa: -', 'cp850'))).toBeGreaterThanOrEqual(0)
+  })
+
+  it('sin codigoFactura, no imprime QR aunque venga slugFacturacion', () => {
+    const buffer = construirTicketPensionado({ ...datosBase, slugFacturacion: 'centro' })
+    expect(buffer.indexOf(iconv.encode('Escanea para facturar', 'cp850'))).toBe(-1)
+  })
+
+  it('con codigoFactura y slugFacturacion, imprime el QR con la URL correcta', () => {
+    const buffer = construirTicketPensionado({ ...datosBase, codigoFactura: 'MEN-042817', slugFacturacion: 'centro' })
+    const url = urlFacturacion('centro', 'MEN-042817')
+    const bytesUrl = Buffer.from(url, 'utf8')
+    const cuerpo = Buffer.concat([Buffer.from([0x31, 0x50, 0x30]), bytesUrl])
+    const comandoGuardarDatos = Buffer.concat([
+      Buffer.from([0x1d, 0x28, 0x6b, cuerpo.length & 0xff, (cuerpo.length >> 8) & 0xff]),
+      cuerpo
+    ])
+    expect(buffer.indexOf(comandoGuardarDatos)).toBeGreaterThanOrEqual(0)
+    expect(buffer.indexOf(iconv.encode('Escanea para facturar', 'cp850'))).toBeGreaterThanOrEqual(0)
   })
 })
 

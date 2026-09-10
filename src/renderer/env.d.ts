@@ -289,6 +289,7 @@ declare global {
         cargoBoletoPerdido: number
         umbralRecobroSospechoso: number
         claveFolio: string
+        slugFacturacion: string | null
       }>
       login: (params: { nombreUsuario: string; password: string }) => Promise<UsuarioApi>
       logout: () => Promise<void>
@@ -328,6 +329,7 @@ declare global {
                 excedenteMinutos?: number
                 excedenteMonto?: number
                 recargoBoletoPerdido?: number
+                slugFacturacion?: string | null
               }
             }
           | {
@@ -345,6 +347,7 @@ declare global {
                 periodoDesde?: string
                 periodoHasta?: string
                 codigoFactura?: string
+                slugFacturacion?: string | null
               }
             }
         datosReporte?:

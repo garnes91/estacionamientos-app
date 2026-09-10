@@ -168,11 +168,20 @@
   const elBoton = document.getElementById('btn-enviar')
   const elMensaje = document.getElementById('mensaje')
 
-  const slug = new URLSearchParams(location.search).get('estacionamiento')
+  const parametros = new URLSearchParams(location.search)
+  const slug = parametros.get('estacionamiento')
   if (!slug) {
     elSinEstacionamiento.style.display = 'block'
   } else {
     elFormularioCaja.style.display = 'block'
+  }
+
+  // Si vino de escanear el QR del recibo (ver urlFacturacion.ts en la app
+  // de escritorio), el código ya llega prellenado — nadie tiene que
+  // volver a teclearlo a mano.
+  const codigoQR = parametros.get('codigo')
+  if (codigoQR) {
+    document.getElementById('codigoImpreso').value = codigoQR
   }
 
   const app = initializeApp(firebaseConfig)

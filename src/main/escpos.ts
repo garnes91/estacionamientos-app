@@ -1,5 +1,6 @@
 import iconv from 'iconv-lite'
 import { formatearFolio } from '../logic/folioBarcode'
+import { urlFacturacion } from '../logic/urlFacturacion'
 import { ESQUEMA_COCHE_ALTO, ESQUEMA_COCHE_ANCHO, ESQUEMA_COCHE_DATOS_BASE64 } from './escposEsquemaCoche'
 
 /**
@@ -90,6 +91,32 @@ function barcode(valor: string): Buffer {
     Buffer.from([GS, 0x66, 0]), // GS f 0 — fuente A para ese texto legible
     Buffer.from([GS, 0x6b, 73, datos.length]), // GS k 73 n — imprime CODE128
     datos,
+    saltoLinea()
+  ])
+}
+
+/** Cuerpo común de los comandos "GS ( k" (2D symbol, estándar Epson) — arma el prefijo pL/pH a partir del largo real. */
+function comandoGSk(cn: number, fn: number, datos: Buffer = Buffer.alloc(0)): Buffer {
+  const cuerpo = Buffer.concat([Buffer.from([cn, fn]), datos])
+  return Buffer.concat([Buffer.from([GS, 0x28, 0x6b, cuerpo.length & 0xff, (cuerpo.length >> 8) & 0xff]), cuerpo])
+}
+
+/**
+ * Código QR nativo de la impresora (comandos "GS ( k" — 2D symbol storage,
+ * estándar Epson que la mayoría de los clones imita) — igual que
+ * barcode(), el firmware de la impresora dibuja el QR solo, sin
+ * rasterizar nada aquí. Modelo 2 (el más compatible), módulo de 6 puntos
+ * (legible sin ocupar medio ticket) y corrección de errores nivel M.
+ */
+function qrCode(datos: string): Buffer {
+  const bytesDatos = Buffer.from(datos, 'utf8')
+  return Buffer.concat([
+    alinear('centro'),
+    comandoGSk(0x31, 0x41, Buffer.from([0x32, 0x00])), // fn 65: modelo 2
+    comandoGSk(0x31, 0x43, Buffer.from([6])), // fn 67: tamaño de módulo
+    comandoGSk(0x31, 0x45, Buffer.from([49])), // fn 69: corrección de errores nivel M
+    comandoGSk(0x31, 0x50, Buffer.concat([Buffer.from([0x30]), bytesDatos])), // fn 80: guarda los datos
+    comandoGSk(0x31, 0x51, Buffer.from([0x30])), // fn 81: imprime
     saltoLinea()
   ])
 }
@@ -189,6 +216,10 @@ export interface DatosReciboCobroEscpos {
   excedenteMinutos?: number
   excedenteMonto?: number
   recargoBoletoPerdido?: number
+  // Slug de "Monitoreo en la nube" (null si facturación no está
+  // habilitada o no hay proyecto Firebase configurado) — con esto se
+  // imprime un QR al portal de autofacturación, ver urlFacturacion().
+  slugFacturacion?: string | null
 }
 
 export function construirTicketCobro(datos: DatosReciboCobroEscpos, claveFolio: string): Buffer {
@@ -222,6 +253,10 @@ export function construirTicketCobro(datos: DatosReciboCobroEscpos, claveFolio: 
     partes.push(texto(`Recargo boleto perdido: $${recargoBoletoPerdido.toFixed(2)}`))
   }
   partes.push(barcode(textoFolio))
+  if (datos.slugFacturacion) {
+    partes.push(qrCode(urlFacturacion(datos.slugFacturacion, textoFolio)))
+    partes.push(texto('Escanea para facturar', { centrado: true }))
+  }
   partes.push(linea())
   partes.push(texto(`Total: $${datos.monto.toFixed(2)}`, { negrita: true }))
   partes.push(cortar())
@@ -242,6 +277,10 @@ export interface DatosTicketPensionadoEscpos {
   periodoDesde?: string
   periodoHasta?: string
   codigoFactura?: string
+  // Slug de "Monitoreo en la nube" (null si facturación no está
+  // habilitada o no hay proyecto Firebase configurado) — con esto y
+  // codigoFactura se imprime un QR al portal de autofacturación.
+  slugFacturacion?: string | null
 }
 
 const TITULOS_PENSIONADO: Record<DatosTicketPensionadoEscpos['tipo'], string> = {
@@ -272,6 +311,10 @@ export function construirTicketPensionado(datos: DatosTicketPensionadoEscpos): B
     partes.push(texto(`Monto pagado: $${datos.monto!.toFixed(2)}`, { negrita: true }))
     if (datos.codigoFactura) {
       partes.push(texto(`Código de factura: ${datos.codigoFactura}`))
+      if (datos.slugFacturacion) {
+        partes.push(qrCode(urlFacturacion(datos.slugFacturacion, datos.codigoFactura)))
+        partes.push(texto('Escanea para facturar', { centrado: true }))
+      }
     }
   }
 

@@ -44,7 +44,17 @@ export function registrarIpc(): void {
   ipcMain.handle('estacionamiento:actual', () => {
     const db = obtenerDb()
     const estacionamiento = obtenerEstacionamientoActual(db)
-    return { ...estacionamiento, claveFolio: obtenerOCrearClaveFolio(db, estacionamiento.id) }
+    // Solo si facturación está habilitada Y hay proyecto Firebase — un
+    // QR/código que apunte a un portal sin nada que encontrar no le sirve
+    // a nadie (ver ReciboCobro.tsx/PensionadoTicket.tsx).
+    const facturacionHabilitada = obtenerConfiguracionFacturacion(db, estacionamiento.id)?.habilitado ?? false
+    const monitoreo = obtenerConfiguracionMonitoreo(db, estacionamiento.id)
+    const slugFacturacion = facturacionHabilitada && monitoreo ? monitoreo.slug : null
+    return {
+      ...estacionamiento,
+      claveFolio: obtenerOCrearClaveFolio(db, estacionamiento.id),
+      slugFacturacion
+    }
   })
 
   ipcMain.handle('auth:login', (_evento, params: { nombreUsuario: string; password: string }) => {

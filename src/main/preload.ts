@@ -58,6 +58,7 @@ contextBridge.exposeInMainWorld('api', {
             excedenteMinutos?: number
             excedenteMonto?: number
             recargoBoletoPerdido?: number
+            slugFacturacion?: string | null
           }
         }
       | {
@@ -75,6 +76,7 @@ contextBridge.exposeInMainWorld('api', {
             periodoDesde?: string
             periodoHasta?: string
             codigoFactura?: string
+            slugFacturacion?: string | null
           }
         }
     // Datos estructurados del corte de caja — igual que datosTicket, solo

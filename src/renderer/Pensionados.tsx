@@ -45,6 +45,7 @@ export function Pensionados({ onVolver }: { onVolver: () => void }): ReactElemen
   const [error, setError] = useState<string | null>(null)
   const [mensaje, setMensaje] = useState<string | null>(null)
   const [ultimoTicket, setUltimoTicket] = useState<DatosTicketPensionado | null>(null)
+  const [slugFacturacion, setSlugFacturacion] = useState<string | null>(null)
 
   const [mostrarFormAlta, setMostrarFormAlta] = useState(false)
   const [formAlta, setFormAlta] = useState({ nombre: '', telefono: '', placa: '', tipoVehiculoId: 0, cuotaMensual: 0 })
@@ -65,6 +66,7 @@ export function Pensionados({ onVolver }: { onVolver: () => void }): ReactElemen
     window.api.estacionamientoActual().then((e) => {
       setEstacionamientoId(e.id)
       setNombreEstacionamiento(e.nombre)
+      setSlugFacturacion(e.slugFacturacion)
       window.api.listarTiposVehiculo(e.id).then((tipos) => {
         setTiposVehiculo(tipos)
         setFormAlta((f) => ({ ...f, tipoVehiculoId: tipos[0]?.id ?? 0 }))
@@ -177,7 +179,8 @@ export function Pensionados({ onVolver }: { onVolver: () => void }): ReactElemen
         monto: pago.monto,
         periodoDesde: pago.periodoDesde,
         periodoHasta: pago.periodoHasta,
-        codigoFactura: pago.codigoFactura
+        codigoFactura: pago.codigoFactura,
+        slugFacturacion
       })
     } catch (e) {
       setError(String(e))

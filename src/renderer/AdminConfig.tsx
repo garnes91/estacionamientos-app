@@ -1485,16 +1485,16 @@ function TabImpresion({ estacionamientoId, avisar, avisarError }: TabProps): Rea
 }
 
 // ============================================================
-// Facturación — datos fiscales del emisor para este estacionamiento
-// (RFC/régimen propios, ya que varios operan bajo RESICO). El CSD y la
-// llave de FacturAPI NO se capturan aquí — viven solo del lado del backend
-// de facturación, nunca en esta computadora.
+// Facturación — solo lo que FacturAPI necesita y que NO es secreto
+// (código postal fiscal, catálogo SAT, descripción del servicio). El
+// RFC/razón social/régimen fiscal del estacionamiento NO se capturan
+// aquí: no se usan en ningún lado del flujo real, FacturAPI ya conoce al
+// emisor por la organización/llave a la que está ligado el secretKey. El
+// CSD y la llave de FacturAPI en sí tampoco se capturan aquí — viven
+// solo del lado del backend de facturación, nunca en esta computadora.
 // ============================================================
 interface ConfiguracionFacturacion {
   habilitado: boolean
-  rfc: string
-  razonSocial: string
-  regimenFiscal: string
   codigoPostalFiscal: string
   claveProductoServicio: string
   claveUnidad: string
@@ -1503,9 +1503,6 @@ interface ConfiguracionFacturacion {
 
 const FACTURACION_VACIA: ConfiguracionFacturacion = {
   habilitado: false,
-  rfc: '',
-  razonSocial: '',
-  regimenFiscal: '',
   codigoPostalFiscal: '',
   claveProductoServicio: '78101803',
   claveUnidad: 'E48',
@@ -1537,9 +1534,10 @@ function TabFacturacion({ estacionamientoId, avisar, avisarError }: TabProps): R
   return (
     <div>
       <p style={{ color: '#666', fontSize: '0.85rem' }}>
-        Datos fiscales del emisor para este estacionamiento — cada instalación puede tener su propio RFC y régimen
-        (muchos operan bajo RESICO). El certificado de sello digital (CSD) y las llaves del proveedor de
-        facturación se configuran aparte, directamente en el proveedor, no aquí.
+        El RFC/razón social/régimen fiscal de este estacionamiento se configuran directamente en tu cuenta de
+        FacturAPI (la organización ligada a tu Secret Key), no aquí — FacturAPI ya sabe quién es el emisor por eso,
+        nunca por datos que esta app le mande. El certificado de sello digital (CSD) y la Secret Key tampoco se
+        capturan aquí — se dan de alta aparte, directo en Firebase Console (<code>facturacionSecretos</code>).
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '0.5rem', alignItems: 'center', maxWidth: 480 }}>
@@ -1548,29 +1546,6 @@ function TabFacturacion({ estacionamientoId, avisar, avisarError }: TabProps): R
           type="checkbox"
           checked={config.habilitado}
           onChange={(e) => setConfig({ ...config, habilitado: e.target.checked })}
-        />
-
-        <label>RFC</label>
-        <input
-          style={inputStyle}
-          placeholder="XAXX010101000"
-          value={config.rfc}
-          onChange={(e) => setConfig({ ...config, rfc: e.target.value })}
-        />
-
-        <label>Razón social</label>
-        <input
-          style={inputStyle}
-          value={config.razonSocial}
-          onChange={(e) => setConfig({ ...config, razonSocial: e.target.value })}
-        />
-
-        <label>Régimen fiscal (clave SAT)</label>
-        <input
-          style={inputStyle}
-          placeholder="626 = RESICO"
-          value={config.regimenFiscal}
-          onChange={(e) => setConfig({ ...config, regimenFiscal: e.target.value })}
         />
 
         <label>Código postal fiscal</label>
@@ -1603,11 +1578,9 @@ function TabFacturacion({ estacionamientoId, avisar, avisarError }: TabProps): R
         />
       </div>
       <p style={{ color: '#999', fontSize: '0.8rem', maxWidth: 480 }}>
-        Estos últimos 3 campos (clave producto/servicio, clave unidad, descripción) se suben solos al guardar al
-        proyecto de Firebase de este estacionamiento — así no hay que volver a capturarlos a mano en Firebase
-        Console. El RFC/razón social/régimen NO se suben (se usan solo aquí, para lo que se muestra al cliente);
-        el código postal fiscal sí se sube porque lo necesita la factura global. La llave de FacturAPI en sí
-        (secretKey/organizationId) sigue siendo 100% manual en Firebase Console, nunca sale de ahí.
+        Estos 4 campos se suben solos al guardar al proyecto de Firebase de este estacionamiento — así no hay que
+        volver a capturarlos a mano en Firebase Console. La llave de FacturAPI en sí (secretKey/organizationId)
+        sigue siendo 100% manual ahí, nunca sale de Firebase Console.
       </p>
       <p style={{ color: '#999', fontSize: '0.8rem', maxWidth: 480 }}>
         La factura global de "público en general" de cada serie se genera desde el panel del operador

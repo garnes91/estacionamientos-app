@@ -21,9 +21,6 @@ afterEach(() => {
 
 const configFacturacionEjemplo = {
   habilitado: true,
-  rfc: 'XAXX010101000',
-  razonSocial: 'Estacionamientos del Centro SA de CV',
-  regimenFiscal: '626',
   codigoPostalFiscal: '44100',
   claveProductoServicio: '78101803',
   claveUnidad: 'E48',

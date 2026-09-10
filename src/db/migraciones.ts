@@ -51,6 +51,14 @@ export function migrarColumnasFaltantes(db: DB): void {
     'descripcion_servicio',
     "descripcion_servicio TEXT NOT NULL DEFAULT 'Servicio de estacionamiento'"
   )
+  // rfc/razon_social/regimen_fiscal DEL ESTACIONAMIENTO: se quitaron
+  // porque no se usaban en ningún lado del flujo real de facturación
+  // (FacturAPI ya conoce al emisor por la organización/llave, no por
+  // datos que la app le mande) — eran NOT NULL sin default, así que si
+  // se dejan tal cual, un INSERT nuevo (que ya no los llena) truena.
+  quitarColumnaSiExiste(db, 'configuracion_facturacion', 'rfc')
+  quitarColumnaSiExiste(db, 'configuracion_facturacion', 'razon_social')
+  quitarColumnaSiExiste(db, 'configuracion_facturacion', 'regimen_fiscal')
   ampliarRolUsuariosSiHaceFalta(db)
 }
 
@@ -65,6 +73,22 @@ export function agregarColumnaSiFalta(db: DB, tabla: string, columna: string, de
   const columnas = db.prepare(`PRAGMA table_info(${tabla})`).all() as { name: string }[]
   if (!columnas.some((c) => c.name === columna)) {
     db.exec(`ALTER TABLE ${tabla} ADD COLUMN ${definicionColumna}`)
+  }
+}
+
+/**
+ * Contraparte de agregarColumnaSiFalta, para una columna que dejó de
+ * usarse. A diferencia de agregar, SQLite (3.35+) sí soporta DROP COLUMN
+ * directo — no hace falta recrear la tabla completa como con un CHECK
+ * (ver ampliarRolUsuariosSiHaceFalta), porque no renombra nada ni puede
+ * romper FKs de otras tablas.
+ */
+export function quitarColumnaSiExiste(db: DB, tabla: string, columna: string): void {
+  if (!tablaExiste(db, tabla)) return
+
+  const columnas = db.prepare(`PRAGMA table_info(${tabla})`).all() as { name: string }[]
+  if (columnas.some((c) => c.name === columna)) {
+    db.exec(`ALTER TABLE ${tabla} DROP COLUMN ${columna}`)
   }
 }
 

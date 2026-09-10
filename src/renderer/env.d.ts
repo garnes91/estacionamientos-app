@@ -254,9 +254,6 @@ interface RespaldoInfoApi {
 
 interface ConfiguracionFacturacionApi {
   habilitado: boolean
-  rfc: string
-  razonSocial: string
-  regimenFiscal: string
   codigoPostalFiscal: string
   claveProductoServicio: string
   claveUnidad: string

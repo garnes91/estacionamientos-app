@@ -279,15 +279,19 @@ CREATE TABLE IF NOT EXISTS configuracion_monitoreo (
 -- que el resto de la configuración, no de forma global a la app.
 -- OJO: aquí NO se guarda el CSD ni la Secret Key de FacturAPI — esos solo
 -- viven del lado del Cloud Function (ver plan de facturación), nunca en
--- este SQLite local ni en el portal público.
+-- este SQLite local ni en el portal público. Tampoco se guarda el RFC ni
+-- la razón social/régimen fiscal DEL ESTACIONAMIENTO — se quitaron
+-- porque no se usan en ningún lado del flujo real de facturación:
+-- FacturAPI ya sabe quién es el emisor por la organización/llave a la
+-- que está ligado el secretKey (ver facturacionSecretos en Firestore),
+-- nunca por datos que la app le mande en cada factura. El único RFC que
+-- sí viaja en la llamada es el del CLIENTE que pide la factura
+-- (capturado en el portal público, nunca aquí).
 -- ============================================================
 CREATE TABLE IF NOT EXISTS configuracion_facturacion (
   id                            INTEGER PRIMARY KEY AUTOINCREMENT,
   estacionamiento_id            INTEGER NOT NULL REFERENCES estacionamientos(id),
   habilitado                    INTEGER NOT NULL DEFAULT 0 CHECK (habilitado IN (0, 1)),
-  rfc                           TEXT NOT NULL,
-  razon_social                  TEXT NOT NULL,
-  regimen_fiscal                TEXT NOT NULL,
   codigo_postal_fiscal          TEXT NOT NULL,
   clave_producto_servicio       TEXT NOT NULL DEFAULT '78101803',
   clave_unidad                  TEXT NOT NULL DEFAULT 'E48',

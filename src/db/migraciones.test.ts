@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3'
 import { describe, expect, it } from 'vitest'
 import type { DB } from './index'
-import { agregarColumnaSiFalta, ampliarRolUsuariosSiHaceFalta } from './migraciones'
+import { agregarColumnaSiFalta, ampliarRolUsuariosSiHaceFalta, quitarColumnaSiExiste } from './migraciones'
 
 describe('agregarColumnaSiFalta', () => {
   it('agrega la columna a una tabla existente que no la tiene', () => {
@@ -43,6 +43,42 @@ describe('agregarColumnaSiFalta', () => {
 
     const fila = db.prepare('SELECT nueva FROM ejemplo WHERE id = 1').get()
     expect(fila).toEqual({ nueva: 'valor-existente' })
+  })
+})
+
+describe('quitarColumnaSiExiste', () => {
+  it('quita la columna de una tabla que la tiene', () => {
+    const db: DB = new Database(':memory:')
+    db.exec("CREATE TABLE ejemplo (id INTEGER PRIMARY KEY, sobra TEXT NOT NULL DEFAULT '', queda TEXT)")
+    db.exec("INSERT INTO ejemplo (id, sobra, queda) VALUES (1, 'x', 'y')")
+
+    quitarColumnaSiExiste(db, 'ejemplo', 'sobra')
+
+    const columnas = (db.prepare('PRAGMA table_info(ejemplo)').all() as { name: string }[]).map((c) => c.name)
+    expect(columnas).toEqual(['id', 'queda'])
+    expect(db.prepare('SELECT queda FROM ejemplo WHERE id = 1').get()).toEqual({ queda: 'y' })
+  })
+
+  it('no truena si la tabla todavía no existe (instalación nueva)', () => {
+    const db: DB = new Database(':memory:')
+    expect(() => quitarColumnaSiExiste(db, 'no_existe', 'columna')).not.toThrow()
+  })
+
+  it('es idempotente: correrla dos veces seguidas no falla', () => {
+    const db: DB = new Database(':memory:')
+    db.exec('CREATE TABLE ejemplo (id INTEGER PRIMARY KEY, sobra TEXT)')
+
+    quitarColumnaSiExiste(db, 'ejemplo', 'sobra')
+    expect(() => quitarColumnaSiExiste(db, 'ejemplo', 'sobra')).not.toThrow()
+  })
+
+  it('no permite un INSERT nuevo violar un NOT NULL de la columna que ya no está (simula la migración real)', () => {
+    const db: DB = new Database(':memory:')
+    db.exec("CREATE TABLE ejemplo (id INTEGER PRIMARY KEY, sobra TEXT NOT NULL, queda TEXT)")
+
+    quitarColumnaSiExiste(db, 'ejemplo', 'sobra')
+
+    expect(() => db.prepare('INSERT INTO ejemplo (id, queda) VALUES (1, ?)').run('ok')).not.toThrow()
   })
 })
 

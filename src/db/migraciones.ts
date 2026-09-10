@@ -45,6 +45,12 @@ export function migrarColumnasFaltantes(db: DB): void {
     'respaldo_nube',
     'respaldo_nube INTEGER NOT NULL DEFAULT 0 CHECK (respaldo_nube IN (0, 1))'
   )
+  agregarColumnaSiFalta(
+    db,
+    'configuracion_facturacion',
+    'descripcion_servicio',
+    "descripcion_servicio TEXT NOT NULL DEFAULT 'Servicio de estacionamiento'"
+  )
   ampliarRolUsuariosSiHaceFalta(db)
 }
 

@@ -2,47 +2,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { abrirDb, DB } from '../db'
 import { sembrarSiVacio } from '../db/seed'
 import { obtenerEstacionamientoActual } from '../db/estacionamientos'
-import { obtenerUsuarioPorDefecto } from '../db/usuarios'
-import { listarTiposVehiculo } from '../db/tiposVehiculo'
-import { crearPensionado, registrarPago } from '../db/pensionados'
 import { guardarConfiguracionFacturacion } from '../db/configuracionFacturacion'
 import { guardarConfiguracionMonitoreo } from '../db/configuracionMonitoreo'
-import { sincronizarPagoPensionado } from './pensionadosFacturacionSync'
+import { sincronizarCatalogoFacturacion } from './facturacionCatalogoSync'
 
 let db: DB
 let estacionamientoId: number
-let usuarioId: number
-let tipoAutoId: number
-let pensionadoId: number
 
 beforeEach(() => {
   db = abrirDb(':memory:')
   sembrarSiVacio(db)
   estacionamientoId = obtenerEstacionamientoActual(db).id
-  usuarioId = obtenerUsuarioPorDefecto(db, estacionamientoId).id
-  tipoAutoId = listarTiposVehiculo(db, estacionamientoId).find((t) => t.nombre === 'Auto')!.id
-  pensionadoId = crearPensionado(db, {
-    estacionamientoId,
-    nombre: 'Ana Pérez',
-    tipoVehiculoId: tipoAutoId,
-    cuotaMensual: 800,
-    usuarioAltaId: usuarioId
-  }).id
 })
 
 afterEach(() => {
   vi.restoreAllMocks()
 })
-
-function registrarPagoDePrueba() {
-  return registrarPago(db, {
-    pensionadoId,
-    periodoDesde: '2026-09-01T00:00:00.000Z',
-    periodoHasta: '2026-10-01T00:00:00.000Z',
-    monto: 800,
-    usuarioId
-  })
-}
 
 const configFacturacionEjemplo = {
   habilitado: true,
@@ -63,12 +38,13 @@ const configMonitoreoEjemplo = {
   respaldoNube: false
 }
 
-describe('sincronizarPagoPensionado', () => {
-  it('no llama a Firestore si la facturación no está habilitada', async () => {
+describe('sincronizarCatalogoFacturacion', () => {
+  it('no llama a Firestore si facturación no está habilitada', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch')
     guardarConfiguracionMonitoreo(db, estacionamientoId, configMonitoreoEjemplo)
+    guardarConfiguracionFacturacion(db, estacionamientoId, { ...configFacturacionEjemplo, habilitado: false })
 
-    await sincronizarPagoPensionado(db, estacionamientoId, registrarPagoDePrueba())
+    await sincronizarCatalogoFacturacion(db, estacionamientoId)
 
     expect(fetchSpy).not.toHaveBeenCalled()
   })
@@ -77,15 +53,14 @@ describe('sincronizarPagoPensionado', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch')
     guardarConfiguracionFacturacion(db, estacionamientoId, configFacturacionEjemplo)
 
-    await sincronizarPagoPensionado(db, estacionamientoId, registrarPagoDePrueba())
+    await sincronizarCatalogoFacturacion(db, estacionamientoId)
 
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
-  it('sube el pago a una colección aparte de la de boletos, con el nombre del pensionado y facturado=false', async () => {
+  it('sube solo los 4 campos no secretos a facturacionSecretos/{slug}', async () => {
     guardarConfiguracionFacturacion(db, estacionamientoId, configFacturacionEjemplo)
     guardarConfiguracionMonitoreo(db, estacionamientoId, configMonitoreoEjemplo)
-    const pago = registrarPagoDePrueba()
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL) => {
       const url = String(input)
@@ -97,26 +72,30 @@ describe('sincronizarPagoPensionado', () => {
       return Promise.resolve(new Response('{}', { status: 200 }))
     })
 
-    await sincronizarPagoPensionado(db, estacionamientoId, pago)
+    await sincronizarCatalogoFacturacion(db, estacionamientoId)
 
     const llamadaPatch = fetchSpy.mock.calls.find(([input]) => !String(input).includes('identitytoolkit'))
     expect(llamadaPatch).toBeDefined()
     const [url, opciones] = llamadaPatch!
-    expect(String(url)).toContain(`estacionamientos/${configMonitoreoEjemplo.slug}/pagosPensionadosFacturables/`)
-    expect(String(url)).not.toContain('boletosFacturables')
+    expect(String(url)).toContain(`facturacionSecretos/${configMonitoreoEjemplo.slug}`)
     expect((opciones as RequestInit).method).toBe('PATCH')
 
     const cuerpo = JSON.parse((opciones as RequestInit).body as string)
-    expect(cuerpo.fields.pensionadoNombre.stringValue).toBe('Ana Pérez')
-    expect(cuerpo.fields.monto.doubleValue).toBe(800)
-    expect(cuerpo.fields.facturado.booleanValue).toBe(false)
+    expect(Object.keys(cuerpo.fields).sort()).toEqual(
+      ['claveProductoServicio', 'claveUnidad', 'codigoPostalFiscal', 'descripcionServicio'].sort()
+    )
+    expect(cuerpo.fields.claveProductoServicio.stringValue).toBe('78101803')
+    expect(cuerpo.fields.codigoPostalFiscal.stringValue).toBe('44100')
+    // No debe llevar organizationId ni secretKey — nunca se suben desde ningún cliente.
+    expect(cuerpo.fields.secretKey).toBeUndefined()
+    expect(cuerpo.fields.organizationId).toBeUndefined()
   })
 
-  it('no lanza si Firestore falla — el pago ya quedó guardado localmente', async () => {
+  it('no lanza si Firestore falla', async () => {
     guardarConfiguracionFacturacion(db, estacionamientoId, configFacturacionEjemplo)
     guardarConfiguracionMonitoreo(db, estacionamientoId, configMonitoreoEjemplo)
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('sin conexión'))
 
-    await expect(sincronizarPagoPensionado(db, estacionamientoId, registrarPagoDePrueba())).resolves.toBeUndefined()
+    await expect(sincronizarCatalogoFacturacion(db, estacionamientoId)).resolves.toBeUndefined()
   })
 })

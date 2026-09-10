@@ -38,7 +38,8 @@ const configFacturacionEjemplo = {
   regimenFiscal: '626',
   codigoPostalFiscal: '44100',
   claveProductoServicio: '78101803',
-  claveUnidad: 'E48'
+  claveUnidad: 'E48',
+  descripcionServicio: 'Servicio de estacionamiento'
 }
 
 const configMonitoreoEjemplo = {

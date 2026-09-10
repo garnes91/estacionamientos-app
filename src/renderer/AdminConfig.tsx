@@ -1498,6 +1498,7 @@ interface ConfiguracionFacturacion {
   codigoPostalFiscal: string
   claveProductoServicio: string
   claveUnidad: string
+  descripcionServicio: string
 }
 
 const FACTURACION_VACIA: ConfiguracionFacturacion = {
@@ -1507,7 +1508,8 @@ const FACTURACION_VACIA: ConfiguracionFacturacion = {
   regimenFiscal: '',
   codigoPostalFiscal: '',
   claveProductoServicio: '78101803',
-  claveUnidad: 'E48'
+  claveUnidad: 'E48',
+  descripcionServicio: 'Servicio de estacionamiento'
 }
 
 function TabFacturacion({ estacionamientoId, avisar, avisarError }: TabProps): ReactElement {
@@ -1592,7 +1594,21 @@ function TabFacturacion({ estacionamientoId, avisar, avisarError }: TabProps): R
           value={config.claveUnidad}
           onChange={(e) => setConfig({ ...config, claveUnidad: e.target.value })}
         />
+
+        <label>Descripción del servicio</label>
+        <input
+          style={inputStyle}
+          value={config.descripcionServicio}
+          onChange={(e) => setConfig({ ...config, descripcionServicio: e.target.value })}
+        />
       </div>
+      <p style={{ color: '#999', fontSize: '0.8rem', maxWidth: 480 }}>
+        Estos últimos 3 campos (clave producto/servicio, clave unidad, descripción) se suben solos al guardar al
+        proyecto de Firebase de este estacionamiento — así no hay que volver a capturarlos a mano en Firebase
+        Console. El RFC/razón social/régimen NO se suben (se usan solo aquí, para lo que se muestra al cliente);
+        el código postal fiscal sí se sube porque lo necesita la factura global. La llave de FacturAPI en sí
+        (secretKey/organizationId) sigue siendo 100% manual en Firebase Console, nunca sale de ahí.
+      </p>
       <p style={{ color: '#999', fontSize: '0.8rem', maxWidth: 480 }}>
         La factura global de "público en general" de cada serie se genera desde el panel del operador
         (<code>panel-operador/index.html</code>, pestaña "Facturación global"), no desde esta app — la maneja quien

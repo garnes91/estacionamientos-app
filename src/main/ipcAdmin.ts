@@ -9,6 +9,7 @@ import {
   validarArchivoDeRespaldo
 } from './respaldos'
 import { listarRespaldosNube } from './respaldoNube'
+import { sincronizarCatalogoFacturacion } from './facturacionCatalogoSync'
 import {
   actualizarCargoBoletoPerdido,
   actualizarNombreEstacionamiento,
@@ -285,7 +286,10 @@ export function registrarIpcAdmin(): void {
     'admin:facturacion:guardar',
     (_evento, params: { estacionamientoId: number; config: ConfiguracionFacturacion }) => {
       requerirAdmin()
-      guardarConfiguracionFacturacion(obtenerDb(), params.estacionamientoId, params.config)
+      const db = obtenerDb()
+      guardarConfiguracionFacturacion(db, params.estacionamientoId, params.config)
+      // Fire-and-forget, como el resto de los sync a Firestore: nunca lanza.
+      sincronizarCatalogoFacturacion(db, params.estacionamientoId)
     }
   )
 

@@ -347,6 +347,7 @@ contextBridge.exposeInMainWorld('api', {
           codigoPostalFiscal: string
           claveProductoServicio: string
           claveUnidad: string
+          descripcionServicio: string
         }
       }) => ipcRenderer.invoke('admin:facturacion:guardar', params)
     },

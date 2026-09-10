@@ -291,6 +291,7 @@ CREATE TABLE IF NOT EXISTS configuracion_facturacion (
   codigo_postal_fiscal          TEXT NOT NULL,
   clave_producto_servicio       TEXT NOT NULL DEFAULT '78101803',
   clave_unidad                  TEXT NOT NULL DEFAULT 'E48',
+  descripcion_servicio          TEXT NOT NULL DEFAULT 'Servicio de estacionamiento',
   UNIQUE (estacionamiento_id)
 );
 

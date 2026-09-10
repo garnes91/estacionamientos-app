@@ -8,6 +8,7 @@ export interface ConfiguracionFacturacion {
   codigoPostalFiscal: string
   claveProductoServicio: string
   claveUnidad: string
+  descripcionServicio: string
 }
 
 interface ConfiguracionFacturacionRow {
@@ -18,12 +19,13 @@ interface ConfiguracionFacturacionRow {
   codigo_postal_fiscal: string
   clave_producto_servicio: string
   clave_unidad: string
+  descripcion_servicio: string
 }
 
 export function obtenerConfiguracionFacturacion(db: DB, estacionamientoId: number): ConfiguracionFacturacion | null {
   const fila = db
     .prepare<[number], ConfiguracionFacturacionRow>(
-      `SELECT habilitado, rfc, razon_social, regimen_fiscal, codigo_postal_fiscal, clave_producto_servicio, clave_unidad
+      `SELECT habilitado, rfc, razon_social, regimen_fiscal, codigo_postal_fiscal, clave_producto_servicio, clave_unidad, descripcion_servicio
        FROM configuracion_facturacion WHERE estacionamiento_id = ?`
     )
     .get(estacionamientoId)
@@ -36,7 +38,8 @@ export function obtenerConfiguracionFacturacion(db: DB, estacionamientoId: numbe
     regimenFiscal: fila.regimen_fiscal,
     codigoPostalFiscal: fila.codigo_postal_fiscal,
     claveProductoServicio: fila.clave_producto_servicio,
-    claveUnidad: fila.clave_unidad
+    claveUnidad: fila.clave_unidad,
+    descripcionServicio: fila.descripcion_servicio
   }
 }
 
@@ -67,8 +70,8 @@ export function guardarConfiguracionFacturacion(
 
   db.prepare(
     `INSERT INTO configuracion_facturacion
-       (estacionamiento_id, habilitado, rfc, razon_social, regimen_fiscal, codigo_postal_fiscal, clave_producto_servicio, clave_unidad)
-     VALUES (?,?,?,?,?,?,?,?)
+       (estacionamiento_id, habilitado, rfc, razon_social, regimen_fiscal, codigo_postal_fiscal, clave_producto_servicio, clave_unidad, descripcion_servicio)
+     VALUES (?,?,?,?,?,?,?,?,?)
      ON CONFLICT(estacionamiento_id) DO UPDATE SET
        habilitado = excluded.habilitado,
        rfc = excluded.rfc,
@@ -76,7 +79,8 @@ export function guardarConfiguracionFacturacion(
        regimen_fiscal = excluded.regimen_fiscal,
        codigo_postal_fiscal = excluded.codigo_postal_fiscal,
        clave_producto_servicio = excluded.clave_producto_servicio,
-       clave_unidad = excluded.clave_unidad`
+       clave_unidad = excluded.clave_unidad,
+       descripcion_servicio = excluded.descripcion_servicio`
   ).run(
     estacionamientoId,
     config.habilitado ? 1 : 0,
@@ -85,6 +89,7 @@ export function guardarConfiguracionFacturacion(
     config.regimenFiscal.trim(),
     config.codigoPostalFiscal.trim(),
     config.claveProductoServicio.trim(),
-    config.claveUnidad.trim()
+    config.claveUnidad.trim(),
+    config.descripcionServicio.trim()
   )
 }

@@ -8,6 +8,7 @@ import { iniciarActualizacionesAutomaticas } from './autoUpdater'
 import { cerrarDb, obtenerDb } from './db'
 import { respaldarSiHaceFalta } from './respaldos'
 import { subirRespaldoNubeSiHaceFalta } from './respaldoNube'
+import { sincronizarEstadisticas } from './estadisticasSync'
 import { obtenerConfiguracionMonitoreo } from '../db/configuracionMonitoreo'
 import { obtenerEstacionamientoActual } from '../db/estacionamientos'
 
@@ -61,6 +62,11 @@ app.whenReady().then(() => {
     .catch((error) => {
       console.error('No se pudo hacer el respaldo automático:', error)
     })
+
+  // Sube Corte mensual/Estadísticas al mismo documento del monitoreo en
+  // vivo, para que panel-operador los pueda mostrar sin ir a la caseta —
+  // ver src/main/estadisticasSync.ts (nunca lanza, no hace falta más aquí).
+  sincronizarEstadisticas(obtenerDb(), obtenerEstacionamientoActual(obtenerDb()).id)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

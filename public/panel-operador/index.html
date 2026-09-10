@@ -196,6 +196,7 @@
   <button class="tab" data-tab="alertas">Alertas<span id="badge-alertas-tab"></span></button>
   <button class="tab" data-tab="configuracion">Configuración</button>
   <button class="tab" data-tab="facturacion">Facturación global</button>
+  <button class="tab" data-tab="estadisticas">Estadísticas</button>
   <button class="tab" data-tab="administracion" id="tab-administracion" style="display:none;">Administración</button>
 </nav>
 
@@ -264,6 +265,27 @@
       <p class="hint">Factura todo lo que siga pendiente de meses YA CERRADOS de esa serie — nunca toca el mes en
         curso, el cliente todavía tiene ese mes completo para pedir su factura individual desde el portal.</p>
       <div id="series-contenido"></div>
+    </div>
+  </div>
+
+  <!-- ================= Estadísticas (Corte mensual / estado de resultados) ================= -->
+  <div id="vista-estadisticas" class="vista">
+    <div id="lista-estadisticas">
+      <h2 style="margin-top:0;">Elige un estacionamiento</h2>
+      <div id="tarjetas-estadisticas"></div>
+      <p id="vacio-estadisticas" class="hint" style="display:none;">Todavía no ha llegado ninguna estadística — se
+        sube sola después de cada corte de turno (y al abrir la app), si el estacionamiento tiene el monitoreo
+        habilitado.</p>
+    </div>
+
+    <div id="editor-estadisticas" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h2 style="margin-top:0;" id="estadisticas-titulo"></h2>
+        <button id="btn-cambiar-estadisticas">Cambiar de estacionamiento</button>
+      </div>
+      <p class="hint">Ingresos (boletos + pensionados) y egresos (todos los gastos) por mes calendario — mismo
+        criterio que Corte mensual en la app de escritorio.</p>
+      <div id="estadisticas-contenido"></div>
     </div>
   </div>
 
@@ -1214,6 +1236,127 @@
     })
   }
 
+  // ================= Estadísticas (Corte mensual / estado de resultados) =================
+  const elListaEstadisticas = document.getElementById('lista-estadisticas')
+  const elTarjetasEstadisticas = document.getElementById('tarjetas-estadisticas')
+  const elVacioEstadisticas = document.getElementById('vacio-estadisticas')
+  const elEditorEstadisticas = document.getElementById('editor-estadisticas')
+  const elEstadisticasTitulo = document.getElementById('estadisticas-titulo')
+  const elEstadisticasContenido = document.getElementById('estadisticas-contenido')
+
+  let desuscribirEstadisticas = null
+  const MESES_CORTOS_ESTADISTICAS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+
+  function mostrarListaEstadisticas() {
+    if (desuscribirEstadisticas) { desuscribirEstadisticas(); desuscribirEstadisticas = null }
+    elEditorEstadisticas.style.display = 'none'
+    elListaEstadisticas.style.display = 'block'
+  }
+
+  document.getElementById('btn-cambiar-estadisticas').addEventListener('click', mostrarListaEstadisticas)
+
+  function formatearMontoEstadisticas(n) {
+    const signo = n < 0 ? '-' : ''
+    return `${signo}$${Math.abs(n).toLocaleString('es-MX', { maximumFractionDigits: 0 })}`
+  }
+
+  // Mismo criterio que la pantalla de escritorio (Estadisticas.tsx): "—" si
+  // los dos meses están en cero, "nuevo" si el anterior estaba en cero y
+  // este no, si no el % de cambio.
+  function calcularCambioEstadisticas(actual, anterior) {
+    if (anterior === 0 && actual === 0) return { texto: '—', color: 'var(--text-secondary)' }
+    if (anterior === 0) return { texto: 'nuevo', color: 'var(--status-good)' }
+    const pct = ((actual - anterior) / Math.abs(anterior)) * 100
+    const signo = pct >= 0 ? '+' : ''
+    return { texto: `${signo}${pct.toFixed(0)}%`, color: pct >= 0 ? 'var(--status-good)' : 'var(--status-critical)' }
+  }
+
+  function renderizarEstadisticas(datos) {
+    elEstadisticasContenido.innerHTML = ''
+    const meses = datos.estadisticasMensuales
+    if (!meses || meses.length === 0) {
+      elEstadisticasContenido.innerHTML = '<p class="hint">Este estacionamiento todavía no ha subido estadísticas — espera a su próximo corte de turno.</p>'
+      return
+    }
+
+    const actual = meses[meses.length - 1]
+    const anterior = meses.length >= 2 ? meses[meses.length - 2] : null
+    const anioPasado = meses.length >= 13 ? meses[0] : null
+
+    const filasResumen = [
+      ['Ingresos', actual.ingresos, anterior, anioPasado, (m) => m.ingresos],
+      ['Egresos', actual.egresos, anterior, anioPasado, (m) => m.egresos],
+      ['Resultado neto', actual.resultadoNeto, anterior, anioPasado, (m) => m.resultadoNeto]
+    ]
+
+    const resumen = document.createElement('div')
+    resumen.className = 'tarjeta'
+    resumen.innerHTML = `
+      <h3 style="margin-top:0;">${MESES_CORTOS_ESTADISTICAS[actual.mes - 1]} ${actual.anio}</h3>
+      <table style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr style="text-align:right; border-bottom:1px solid var(--border);">
+            <th style="text-align:left;"></th><th>Monto</th><th>vs mes anterior</th><th>vs año pasado</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filasResumen.map(([etiqueta, valorActual, mesAnterior, mesAnioPasado, extraer]) => {
+            const cambioAnterior = calcularCambioEstadisticas(valorActual, mesAnterior ? extraer(mesAnterior) : 0)
+            const cambioAnioPasado = calcularCambioEstadisticas(valorActual, mesAnioPasado ? extraer(mesAnioPasado) : 0)
+            return `<tr style="border-bottom:1px solid var(--border);">
+              <td>${etiqueta}</td>
+              <td style="text-align:right; font-weight:600;">${formatearMontoEstadisticas(valorActual)}</td>
+              <td style="text-align:right; color:${cambioAnterior.color};">${cambioAnterior.texto}</td>
+              <td style="text-align:right; color:${cambioAnioPasado.color};">${anioPasado ? cambioAnioPasado.texto : '—'}</td>
+            </tr>`
+          }).join('')}
+        </tbody>
+      </table>
+    `
+    elEstadisticasContenido.appendChild(resumen)
+
+    const tablaMeses = document.createElement('div')
+    tablaMeses.className = 'tarjeta'
+    tablaMeses.style.marginTop = '0.75rem'
+    tablaMeses.innerHTML = `
+      <table style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr style="text-align:right; border-bottom:1px solid var(--border);">
+            <th style="text-align:left;">Mes</th><th>Ingresos</th><th>Egresos</th><th>Resultado neto</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${[...meses].reverse().map((m) => `
+            <tr style="border-bottom:1px solid var(--border);">
+              <td>${MESES_CORTOS_ESTADISTICAS[m.mes - 1]} ${m.anio}</td>
+              <td style="text-align:right;">${formatearMontoEstadisticas(m.ingresos)}</td>
+              <td style="text-align:right;">${formatearMontoEstadisticas(m.egresos)}</td>
+              <td style="text-align:right; font-weight:600; color:${m.resultadoNeto >= 0 ? 'var(--status-good)' : 'var(--status-critical)'};">
+                ${formatearMontoEstadisticas(m.resultadoNeto)}
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `
+    elEstadisticasContenido.appendChild(tablaMeses)
+  }
+
+  function abrirEstadisticas(slug) {
+    elListaEstadisticas.style.display = 'none'
+    elEditorEstadisticas.style.display = 'block'
+    elEstadisticasTitulo.textContent = 'Cargando…'
+    elEstadisticasContenido.innerHTML = ''
+
+    if (desuscribirEstadisticas) desuscribirEstadisticas()
+    desuscribirEstadisticas = onSnapshot(doc(db, 'estacionamientos', slug), (docSnap) => {
+      if (!docSnap.exists()) return
+      const datos = docSnap.data()
+      elEstadisticasTitulo.textContent = datos.nombre ?? slug
+      renderizarEstadisticas(datos)
+    })
+  }
+
   // ================= Administración (solo super admin) =================
   const elTabAdministracion = document.getElementById('tab-administracion')
   const elListaSocios = document.getElementById('lista-socios')
@@ -1431,6 +1574,7 @@
         renderizarTarjetasEstado(snapshot)
         renderizarListaEstacionamientos(elTarjetasConfig, elVacioConfig, snapshot, abrirEditorConfig)
         renderizarListaEstacionamientos(elTarjetasFacturacion, elVacioFacturacion, snapshot, abrirFacturacion)
+        renderizarListaEstacionamientos(elTarjetasEstadisticas, elVacioEstadisticas, snapshot, abrirEstadisticas)
         renderizarVistaAlertas()
         if (esSuperAdmin) renderizarAsignaciones()
       },

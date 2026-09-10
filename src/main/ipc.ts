@@ -29,6 +29,7 @@ import {
 import { CategoriaGasto, eliminarGasto, FormaPagoGasto, listarGastos, registrarGasto } from '../db/gastos'
 import { registrarIpcAdmin } from './ipcAdmin'
 import { sincronizarBoletoCerrado } from './facturacionSync'
+import { sincronizarEstadisticas } from './estadisticasSync'
 import { avisarRecobroSospechoso } from './recobroSospechoso'
 
 /** Registra los canales IPC que el renderer usa vía window.api (ver preload.ts). */
@@ -162,7 +163,11 @@ export function registrarIpc(): void {
   ipcMain.handle('cortes:hacer', (_evento, estacionamientoId: number) => {
     const db = obtenerDb()
     const usuario = requerirUsuarioActual()
-    return hacerCorte(db, estacionamientoId, usuario.id)
+    const corte = hacerCorte(db, estacionamientoId, usuario.id)
+    // Fire-and-forget, como sincronizarBoletoCerrado: nunca lanza, así que
+    // no hace falta await ni .catch() aquí.
+    sincronizarEstadisticas(db, estacionamientoId)
+    return corte
   })
 
   ipcMain.handle('cortes:listar', (_evento, estacionamientoId: number) => {

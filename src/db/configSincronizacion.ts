@@ -1,5 +1,11 @@
 import type { DB } from './index'
-import { obtenerEstacionamientoActual, actualizarNombreEstacionamiento, actualizarTextoBoleto } from './estacionamientos'
+import {
+  obtenerEstacionamientoActual,
+  actualizarNombreEstacionamiento,
+  actualizarTextoBoleto,
+  actualizarCargoBoletoPerdido,
+  actualizarUmbralRecobroSospechoso
+} from './estacionamientos'
 import { listarTiposVehiculoAdmin, actualizarTipoVehiculo, crearTipoVehiculo, eliminarTipoVehiculo } from './tiposVehiculo'
 import { obtenerTarifaProgresivaActivaPorTipo, actualizarTarifaProgresiva } from './tarifas'
 import { listarTarifasPlanas, actualizarTarifaPlana, cambiarPrecioTarifaPlana, crearTarifaPlana } from './tarifasPlanas'
@@ -38,6 +44,8 @@ export interface ConfigSerieSync {
 export interface ConfigSincronizable {
   nombre: string
   textoBoleto: string | null
+  cargoBoletoPerdido: number
+  umbralRecobroSospechoso: number
   tiposVehiculo: ConfigTipoVehiculoSync[]
   tarifasPlanas: ConfigTarifaPlanaSync[]
   series: ConfigSerieSync[]
@@ -72,7 +80,15 @@ export function construirConfigSincronizable(db: DB, estacionamientoId: number):
     siguienteNumero: s.siguienteNumero
   }))
 
-  return { nombre: estacionamiento.nombre, textoBoleto: estacionamiento.textoBoleto, tiposVehiculo, tarifasPlanas, series }
+  return {
+    nombre: estacionamiento.nombre,
+    textoBoleto: estacionamiento.textoBoleto,
+    cargoBoletoPerdido: estacionamiento.cargoBoletoPerdido,
+    umbralRecobroSospechoso: estacionamiento.umbralRecobroSospechoso,
+    tiposVehiculo,
+    tarifasPlanas,
+    series
+  }
 }
 
 function mensajeError(error: unknown): string {
@@ -105,6 +121,20 @@ export function aplicarConfigSincronizable(
 
   if (config.nombre?.trim()) actualizarNombreEstacionamiento(db, estacionamientoId, config.nombre)
   actualizarTextoBoleto(db, estacionamientoId, config.textoBoleto)
+
+  try {
+    if (config.cargoBoletoPerdido != null) actualizarCargoBoletoPerdido(db, estacionamientoId, config.cargoBoletoPerdido)
+  } catch (error) {
+    errores.push(`Cargo por boleto perdido: ${mensajeError(error)}`)
+  }
+
+  try {
+    if (config.umbralRecobroSospechoso != null) {
+      actualizarUmbralRecobroSospechoso(db, estacionamientoId, config.umbralRecobroSospechoso)
+    }
+  } catch (error) {
+    errores.push(`Umbral de recobro sospechoso: ${mensajeError(error)}`)
+  }
 
   // ---- Tipos de vehículo ----
   for (const t of config.tiposVehiculo) {

@@ -47,6 +47,29 @@ describe('aplicarConfigSincronizable', () => {
     expect(actualizado.textoBoleto).toBe('RFC: ABC123')
   })
 
+  it('actualiza cargo por boleto perdido y umbral de recobro sospechoso', () => {
+    const config = construirConfigSincronizable(db, estacionamientoId)
+    config.cargoBoletoPerdido = 150
+    config.umbralRecobroSospechoso = 5
+
+    aplicarConfigSincronizable(db, estacionamientoId, config)
+
+    const actualizado = obtenerEstacionamientoActual(db)
+    expect(actualizado.cargoBoletoPerdido).toBe(150)
+    expect(actualizado.umbralRecobroSospechoso).toBe(5)
+  })
+
+  it('reporta el error de un umbral inválido sin tumbar el resto de los cambios', () => {
+    const config = construirConfigSincronizable(db, estacionamientoId)
+    config.nombre = 'Sí se aplica'
+    config.umbralRecobroSospechoso = 0
+
+    const { errores } = aplicarConfigSincronizable(db, estacionamientoId, config)
+
+    expect(errores).toEqual(['Umbral de recobro sospechoso: El umbral de recobro sospechoso debe ser un entero de al menos 1'])
+    expect(obtenerEstacionamientoActual(db).nombre).toBe('Sí se aplica')
+  })
+
   it('crea una nueva tarifa progresiva versionada solo si los precios cambiaron', () => {
     const config = construirConfigSincronizable(db, estacionamientoId)
     const auto = config.tiposVehiculo.find((t) => t.id === tipoAutoId)!
@@ -108,6 +131,8 @@ describe('aplicarConfigSincronizable', () => {
     const config: ConfigSincronizable = {
       nombre: 'X',
       textoBoleto: null,
+      cargoBoletoPerdido: 0,
+      umbralRecobroSospechoso: 2,
       tiposVehiculo: [{ id: 999999, nombre: 'Fantasma', activo: true, tarifaMaximaDiaria: 10, preciosPorBloque: [] }],
       tarifasPlanas: [{ id: 999999, tipoVehiculoId: tipoAutoId, nombre: 'Fantasma', precioFijo: 1, horasIncluidas: 1, activo: true }],
       series: [{ id: 999999, serie: 'Z', proporcion: 1, activo: true, siguienteNumero: 1 }]

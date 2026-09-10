@@ -815,8 +815,24 @@
     filaTexto.style.marginTop = '0.75rem'
     filaTexto.innerHTML = '<label>Texto del boleto (facturación/dirección fiscal)</label>'
     filaTexto.appendChild(crearCampoTexto(formActual.textoBoleto, (v) => (formActual.textoBoleto = v), 'textarea'))
+
+    const filaMontos = document.createElement('div')
+    filaMontos.className = 'fila'
+    filaMontos.style.marginTop = '0.75rem'
+    const colCargo = document.createElement('div')
+    colCargo.innerHTML = '<label>Cargo por boleto perdido</label>'
+    colCargo.appendChild(crearCampoTexto(formActual.cargoBoletoPerdido, (v) => (formActual.cargoBoletoPerdido = v), 'number'))
+    const colUmbral = document.createElement('div')
+    colUmbral.innerHTML = '<label>Umbral de recobro sospechoso</label>'
+    colUmbral.appendChild(
+      crearCampoTexto(formActual.umbralRecobroSospechoso, (v) => (formActual.umbralRecobroSospechoso = v), 'number')
+    )
+    filaMontos.appendChild(colCargo)
+    filaMontos.appendChild(colUmbral)
+
     tarjetaGeneral.appendChild(filaNombre)
     tarjetaGeneral.appendChild(filaTexto)
+    tarjetaGeneral.appendChild(filaMontos)
     elEditorContenido.appendChild(tarjetaGeneral)
 
     const encabezadoTipos = document.createElement('h3')

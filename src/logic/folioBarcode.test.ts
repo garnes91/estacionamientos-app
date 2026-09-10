@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatearFolio, parsearFolio } from './folioBarcode'
+import { formatearCodigoPago, formatearFolio, parsearFolio } from './folioBarcode'
 
 const CLAVE = 'clave-de-prueba'
 
@@ -41,5 +41,23 @@ describe('parsearFolio', () => {
     expect(parsearFolio('', CLAVE)).toBeNull()
     expect(parsearFolio('A000123', CLAVE)).toBeNull()
     expect(parsearFolio('A-', CLAVE)).toBeNull()
+  })
+})
+
+describe('formatearCodigoPago', () => {
+  it('siempre lleva el prefijo "MEN-", distinto a cualquier formato de formatearFolio', () => {
+    expect(formatearCodigoPago(1, CLAVE)).toMatch(/^MEN-\d{6}$/)
+  })
+
+  it('no delata el id real del pago', () => {
+    expect(formatearCodigoPago(1, CLAVE)).not.toBe('MEN-000001')
+  })
+
+  it('el mismo pago siempre da el mismo código (determinista) con la misma clave', () => {
+    expect(formatearCodigoPago(42, CLAVE)).toBe(formatearCodigoPago(42, CLAVE))
+  })
+
+  it('pagos distintos dan códigos distintos', () => {
+    expect(formatearCodigoPago(1, CLAVE)).not.toBe(formatearCodigoPago(2, CLAVE))
   })
 })

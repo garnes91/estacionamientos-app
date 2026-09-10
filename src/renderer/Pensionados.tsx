@@ -176,7 +176,8 @@ export function Pensionados({ onVolver }: { onVolver: () => void }): ReactElemen
         fecha: new Date().toISOString(),
         monto: pago.monto,
         periodoDesde: pago.periodoDesde,
-        periodoHasta: pago.periodoHasta
+        periodoHasta: pago.periodoHasta,
+        codigoFactura: pago.codigoFactura
       })
     } catch (e) {
       setError(String(e))

@@ -19,6 +19,9 @@ import { obtenerCorteMensual } from '../db/corteMensual'
 import { obtenerIngresosPorMes } from '../db/estadisticas'
 import { alternarModoSoloSerieA, obtenerModoSoloSerieA } from '../db/modoSoloSerieA'
 import { obtenerOCrearClaveFolio } from '../db/claveCifradoFolio'
+import { obtenerConfiguracionFacturacion } from '../db/configuracionFacturacion'
+import { obtenerConfiguracionMonitoreo } from '../db/configuracionMonitoreo'
+import { formatearCodigoPago } from '../logic/folioBarcode'
 import {
   crearPensionado,
   darDeBajaPensionado,
@@ -29,6 +32,7 @@ import {
 import { CategoriaGasto, eliminarGasto, FormaPagoGasto, listarGastos, registrarGasto } from '../db/gastos'
 import { registrarIpcAdmin } from './ipcAdmin'
 import { sincronizarBoletoCerrado } from './facturacionSync'
+import { sincronizarPagoPensionado } from './pensionadosFacturacionSync'
 import { sincronizarEstadisticas } from './estadisticasSync'
 import { avisarRecobroSospechoso } from './recobroSospechoso'
 
@@ -231,8 +235,26 @@ export function registrarIpc(): void {
   ipcMain.handle(
     'pensionados:registrarPago',
     (_evento, params: { pensionadoId: number; periodoDesde: string; periodoHasta: string; monto: number }) => {
+      const db = obtenerDb()
       const usuario = requerirUsuarioActual()
-      return registrarPago(obtenerDb(), { ...params, usuarioId: usuario.id })
+      const pago = registrarPago(db, { ...params, usuarioId: usuario.id })
+      const estacionamientoId = obtenerEstacionamientoActual(db).id
+      // Fire-and-forget, como sincronizarBoletoCerrado: nunca lanza.
+      sincronizarPagoPensionado(db, estacionamientoId, pago)
+
+      // Mismas condiciones que sincronizarPagoPensionado (facturación
+      // habilitada + proyecto Firebase configurado) — imprimir un código
+      // que nunca se subió a ningún lado solo confundiría al pensionado.
+      const facturacionHabilitada = obtenerConfiguracionFacturacion(db, estacionamientoId)?.habilitado
+      const firebaseConfigurado = obtenerConfiguracionMonitoreo(db, estacionamientoId) != null
+      if (!facturacionHabilitada || !firebaseConfigurado) return pago
+
+      // Misma función pura y misma llave que sincronizarPagoPensionado —
+      // garantiza que el código impreso en el recibo es el mismo que el
+      // portal va a encontrar, aunque la subida a Firestore de arriba
+      // todavía no haya terminado cuando se imprime.
+      const claveFolio = obtenerOCrearClaveFolio(db, estacionamientoId)
+      return { ...pago, codigoFactura: formatearCodigoPago(pago.id, claveFolio) }
     }
   )
 

@@ -74,6 +74,7 @@ contextBridge.exposeInMainWorld('api', {
             monto?: number
             periodoDesde?: string
             periodoHasta?: string
+            codigoFactura?: string
           }
         }
     // Datos estructurados del corte de caja — igual que datosTicket, solo

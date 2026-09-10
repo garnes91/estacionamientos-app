@@ -241,6 +241,7 @@ export interface DatosTicketPensionadoEscpos {
   monto?: number
   periodoDesde?: string
   periodoHasta?: string
+  codigoFactura?: string
 }
 
 const TITULOS_PENSIONADO: Record<DatosTicketPensionadoEscpos['tipo'], string> = {
@@ -269,6 +270,9 @@ export function construirTicketPensionado(datos: DatosTicketPensionadoEscpos): B
     const hasta = new Date(datos.periodoHasta!).toLocaleDateString('es-MX')
     partes.push(texto(`Periodo: ${desde} - ${hasta}`))
     partes.push(texto(`Monto pagado: $${datos.monto!.toFixed(2)}`, { negrita: true }))
+    if (datos.codigoFactura) {
+      partes.push(texto(`Código de factura: ${datos.codigoFactura}`))
+    }
   }
 
   partes.push(linea())

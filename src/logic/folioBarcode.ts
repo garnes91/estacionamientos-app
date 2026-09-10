@@ -38,6 +38,22 @@ export function formatearFolio(serie: string, folio: number, claveFolio: string)
   return `${serie}-${String(folioMostrado).padStart(DIGITOS_FOLIO, '0')}`
 }
 
+/**
+ * Código de un PAGO de pensionado, para autofacturación — no es un folio
+ * de boleto (no hay serie ni escaneo de por medio), así que usa el cifrado
+ * simple (sin serie) sobre el id del pago, con la MISMA llave del
+ * estacionamiento. El prefijo "MEN-" es solo para que a simple vista nunca
+ * se confunda con un código de boleto (numérico puro, o "SERIE-000123") —
+ * este código nunca se vuelve a descifrar: el cliente lo pega tal cual en
+ * el portal y el servidor lo busca por igualdad exacta en Firestore, igual
+ * que ya hace con el código de un boleto (ver crearFacturaIndividual en
+ * functions/src/index.ts).
+ */
+export function formatearCodigoPago(pagoId: number, claveFolio: string): string {
+  const cifrado = cifrarFolio(pagoId, claveFolio)
+  return `MEN-${String(cifrado).padStart(DIGITOS_FOLIO, '0')}`
+}
+
 export interface FolioParseado {
   serie: string
   folio: number

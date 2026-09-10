@@ -15,6 +15,9 @@ export interface DatosTicketPensionado {
   monto?: number
   periodoDesde?: string
   periodoHasta?: string
+  // Pago: código de autofacturación de ESTE pago (solo si facturación está
+  // habilitada) — ver src/logic/folioBarcode.ts, formatearCodigoPago.
+  codigoFactura?: string
 }
 
 const TITULOS: Record<TipoTicketPensionado, string> = {
@@ -53,6 +56,7 @@ export function PensionadoTicket({ datos }: { datos: DatosTicketPensionado }): R
             {new Date(datos.periodoHasta!).toLocaleDateString('es-MX')}
           </div>
           <div style={{ fontWeight: 'bold' }}>Monto pagado: ${datos.monto!.toFixed(2)}</div>
+          {datos.codigoFactura && <div>Código de factura: {datos.codigoFactura}</div>}
         </>
       )}
       <hr />

@@ -163,6 +163,11 @@ interface PagoPensionadoApi {
   periodoDesde: string
   periodoHasta: string
   monto: number
+  // Código de autofacturación de ESTE pago (ver src/logic/folioBarcode.ts,
+  // formatearCodigoPago) — cada pago tiene el suyo, distinto al de
+  // cualquier otro periodo del mismo pensionado. Ausente si facturación no
+  // está habilitada o no hay proyecto Firebase configurado.
+  codigoFactura?: string
 }
 
 interface PeriodoSugeridoApi {
@@ -345,6 +350,7 @@ declare global {
                 monto?: number
                 periodoDesde?: string
                 periodoHasta?: string
+                codigoFactura?: string
               }
             }
         datosReporte?:

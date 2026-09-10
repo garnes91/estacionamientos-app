@@ -202,11 +202,14 @@
 
 <main>
   <div id="config" class="tarjeta" style="display:none; max-width:600px; margin:0 auto;">
-    <h2 style="margin-top:0;">URL de función de facturación</h2>
+    <h2 style="margin-top:0;">URLs de funciones de facturación</h2>
     <p>URL de la función <code>crearFacturaGlobalMensual</code> (solo hace falta para la
       pestaña "Facturación global" — aparece al hacer <code>firebase deploy --only functions</code>, o en la consola
       de Firebase → Functions):</p>
     <input id="url-funcion-texto" type="text" placeholder="https://us-central1-tu-proyecto.cloudfunctions.net/crearFacturaGlobalMensual" />
+    <p style="margin-top:1rem;">Y de <code>crearFacturaGlobalMensualPensionados</code> (para la sección "Pensionados"
+      de esa misma pestaña):</p>
+    <input id="url-funcion-pensionados-texto" type="text" placeholder="https://us-central1-tu-proyecto.cloudfunctions.net/crearFacturaGlobalMensualPensionados" />
     <p id="config-error"></p>
     <button class="primario" id="btn-guardar-config" style="margin-top:0.75rem;">Guardar</button>
   </div>
@@ -265,6 +268,11 @@
       <p class="hint">Factura todo lo que siga pendiente de meses YA CERRADOS de esa serie — nunca toca el mes en
         curso, el cliente todavía tiene ese mes completo para pedir su factura individual desde el portal.</p>
       <div id="series-contenido"></div>
+
+      <h3>Pensionados</h3>
+      <p class="hint">Igual que arriba, pero para pagos de mensualidad — todo lo pendiente de meses ya cerrados, en
+        un solo lote (los pensionados no tienen "serie").</p>
+      <div id="pensionados-facturacion-contenido"></div>
     </div>
   </div>
 
@@ -348,6 +356,7 @@
   const SUPER_ADMIN_UID = 'CWNhpqZAmZhfXrKxjtmrYWrTpbf2'
 
   const CLAVE_URL_FUNCION = 'estacionamientos-panel-operador-url-funcion'
+  const CLAVE_URL_FUNCION_PENSIONADOS = 'estacionamientos-panel-operador-url-funcion-pensionados'
   // Debe coincidir con BLOQUES_CONFIGURABLES en src/logic/motorTarifas.ts del repo principal.
   const BLOQUES_CONFIGURABLES = 24
 
@@ -357,6 +366,7 @@
   const elBtnLogout = document.getElementById('btn-logout')
   const elConfig = document.getElementById('config')
   const elUrlFuncionTexto = document.getElementById('url-funcion-texto')
+  const elUrlFuncionPensionadosTexto = document.getElementById('url-funcion-pensionados-texto')
   const elConfigError = document.getElementById('config-error')
   const elLogin = document.getElementById('login')
   const elLoginEmail = document.getElementById('login-email')
@@ -380,21 +390,29 @@
   const db = getFirestore(app)
   const functions = getFunctions(app)
   let urlFuncion = localStorage.getItem(CLAVE_URL_FUNCION) || null
+  let urlFuncionPensionados = localStorage.getItem(CLAVE_URL_FUNCION_PENSIONADOS) || null
 
   elBtnConfig.addEventListener('click', () => {
     elUrlFuncionTexto.value = urlFuncion || ''
+    elUrlFuncionPensionadosTexto.value = urlFuncionPensionados || ''
     elConfigError.textContent = ''
     elConfig.style.display = 'block'
   })
 
   document.getElementById('btn-guardar-config').addEventListener('click', () => {
     const urlFuncionTexto = elUrlFuncionTexto.value.trim()
-    if (urlFuncionTexto && !urlFuncionTexto.startsWith('https://')) {
+    const urlFuncionPensionadosTexto = elUrlFuncionPensionadosTexto.value.trim()
+    if (
+      (urlFuncionTexto && !urlFuncionTexto.startsWith('https://')) ||
+      (urlFuncionPensionadosTexto && !urlFuncionPensionadosTexto.startsWith('https://'))
+    ) {
       elConfigError.textContent = 'La URL de la función debe empezar con https://'
       return
     }
     localStorage.setItem(CLAVE_URL_FUNCION, urlFuncionTexto)
+    localStorage.setItem(CLAVE_URL_FUNCION_PENSIONADOS, urlFuncionPensionadosTexto)
     urlFuncion = urlFuncionTexto
+    urlFuncionPensionados = urlFuncionPensionadosTexto
     elConfig.style.display = 'none'
   })
 
@@ -1243,6 +1261,7 @@
   const elEditorFacturacion = document.getElementById('editor-facturacion')
   const elFacturacionTitulo = document.getElementById('facturacion-titulo')
   const elSeriesContenido = document.getElementById('series-contenido')
+  const elPensionadosFacturacionContenido = document.getElementById('pensionados-facturacion-contenido')
 
   let slugFacturacionActual = null
   let desuscribirFacturacion = null
@@ -1321,11 +1340,67 @@
     }
   }
 
+  function renderizarPensionadosFacturacion(slug) {
+    elPensionadosFacturacionContenido.innerHTML = ''
+    if (!urlFuncionPensionados) {
+      elPensionadosFacturacionContenido.innerHTML =
+        '<p class="hint">Falta la URL de la función — pégala en "Configuración de Firebase".</p>'
+      return
+    }
+
+    const tarjeta = document.createElement('div')
+    tarjeta.className = 'tarjeta'
+    const fila = document.createElement('div')
+    fila.className = 'fila-serie'
+    const info = document.createElement('div')
+    info.innerHTML = '<div class="nombre">Pagos de pensionados pendientes</div><div class="resultado" id="resultado-pensionados"></div>'
+    const boton = document.createElement('button')
+    boton.className = 'primario'
+    boton.textContent = 'Facturar pendientes'
+    boton.addEventListener('click', () => facturarPensionados(slug, boton))
+    fila.appendChild(info)
+    fila.appendChild(boton)
+    tarjeta.appendChild(fila)
+    elPensionadosFacturacionContenido.appendChild(tarjeta)
+  }
+
+  async function facturarPensionados(slug, boton) {
+    const elResultado = document.getElementById('resultado-pensionados')
+    boton.disabled = true
+    elResultado.className = 'resultado'
+    elResultado.textContent = 'Facturando…'
+
+    try {
+      const idToken = await auth.currentUser.getIdToken()
+      const resp = await fetch(urlFuncionPensionados, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ slug })
+      })
+      const datos = await resp.json()
+      if (!resp.ok) throw new Error(datos.error || `La función respondió ${resp.status}`)
+
+      if (datos.cantidadPagos === 0) {
+        elResultado.className = 'resultado'
+        elResultado.textContent = 'Nada pendiente de facturar.'
+      } else {
+        elResultado.className = 'resultado exito'
+        elResultado.textContent = `Listo — ${datos.cantidadPagos} pagos por $${Number(datos.montoTotal).toFixed(2)}, folio fiscal ${datos.folioFiscal}.`
+      }
+    } catch (e) {
+      elResultado.className = 'resultado error'
+      elResultado.textContent = `Error: ${e.message}`
+    } finally {
+      boton.disabled = false
+    }
+  }
+
   function abrirFacturacion(slug) {
     slugFacturacionActual = slug
     elListaFacturacion.style.display = 'none'
     elEditorFacturacion.style.display = 'block'
     elSeriesContenido.innerHTML = 'Cargando…'
+    renderizarPensionadosFacturacion(slug)
 
     if (desuscribirFacturacion) desuscribirFacturacion()
     desuscribirFacturacion = onSnapshot(doc(db, 'estacionamientos', slug), (docSnap) => {

@@ -62,14 +62,29 @@ service cloud.firestore {
           ('ownerUid' in resource.data && resource.data.ownerUid == request.auth.uid)
         );
 
-      // Boletos cerrados pendientes de facturar (facturacionSync.ts). Solo
-      // el backend de facturación (Cloud Functions, vía Admin SDK) puede
-      // tocarlos — el Admin SDK ignora estas reglas, así que "deny all"
-      // aquí es exactamente lo que se busca: ningún cliente (panel-operador,
-      // portal público, ni nadie con la API key) puede leer o alterar
-      // montos/estado de facturación directamente.
+      // Boletos cerrados pendientes de facturar (facturacionSync.ts). La
+      // app de escritorio los SUBE con su propia sesión anónima (no es la
+      // Cloud Function la que los crea) — por eso "write" no puede ser
+      // "false" a secas, o esa subida siempre fallaría en silencio (el
+      // error queda atrapado dentro de sincronizarBoletoCerrado, que nunca
+      // lanza a propósito). "read" sí se niega por completo: nadie —ni
+      // panel-operador, ni el portal público, ni nadie con la apiKey—
+      // puede leer montos directo; el único camino de lectura es
+      // crearFacturaIndividual (Cloud Function, Admin SDK, ignora estas
+      // reglas). Solo se marca `facturado` desde ahí también, así que en
+      // la práctica un cliente anónimo solo puede CREAR el registro inicial
+      // (facturado: false) o repetir esa misma subida — nunca marcarlo
+      // como ya facturado sin pasar por el timbrado real.
       match /boletosFacturables/{codigoImpreso} {
-        allow read, write: if false;
+        allow read: if false;
+        allow create, update: if request.auth != null;
+      }
+
+      // Gemela de la de arriba, para pagos de pensionados (ver
+      // src/main/pensionadosFacturacionSync.ts) — mismo criterio exacto.
+      match /pagosPensionadosFacturables/{codigo} {
+        allow read: if false;
+        allow create, update: if request.auth != null;
       }
 
       // Alertas de "boleto reciclado" (ver src/main/recobroSospechoso.ts) —

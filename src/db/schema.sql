@@ -277,25 +277,24 @@ CREATE TABLE IF NOT EXISTS configuracion_monitoreo (
 -- estacionamiento. Cada instalación puede tener su propio RFC/régimen
 -- (muchas operan bajo RESICO), así que esto vive por estacionamiento igual
 -- que el resto de la configuración, no de forma global a la app.
--- OJO: aquí NO se guarda el CSD ni la Secret Key de FacturAPI — esos solo
--- viven del lado del Cloud Function (ver plan de facturación), nunca en
--- este SQLite local ni en el portal público. Tampoco se guarda el RFC ni
--- la razón social/régimen fiscal DEL ESTACIONAMIENTO — se quitaron
--- porque no se usan en ningún lado del flujo real de facturación:
--- FacturAPI ya sabe quién es el emisor por la organización/llave a la
--- que está ligado el secretKey (ver facturacionSecretos en Firestore),
--- nunca por datos que la app le mande en cada factura. El único RFC que
--- sí viaja en la llamada es el del CLIENTE que pide la factura
--- (capturado en el portal público, nunca aquí).
+-- Solo el interruptor de "habilitado" — es lo único de esta tabla que
+-- realmente hace falta LOCALMENTE: decide si facturacionSync.ts /
+-- pensionadosFacturacionSync.ts se molestan en calcular y subir códigos
+-- facturables cada vez que se cierra un boleto o se registra un pago
+-- (ver esos archivos), sin necesitar ida y vuelta a internet para
+-- saberlo. Todo lo demás (RFC/razón social/régimen del estacionamiento,
+-- código postal fiscal, claves del catálogo SAT, descripción del
+-- servicio, organizationId, secretKey) vive SOLO en Firestore
+-- (facturacionSecretos/{slug}), capturado a mano una sola vez — ninguno
+-- de esos otros campos lo usa esta app localmente para nada, así que no
+-- tiene caso guardarlos aquí también (se intentó sincronizarlos solos
+-- desde aquí y resultó ser una vuelta innecesaria: si nada local los
+-- consume, es más simple capturarlos una sola vez donde sí se usan).
 -- ============================================================
 CREATE TABLE IF NOT EXISTS configuracion_facturacion (
   id                            INTEGER PRIMARY KEY AUTOINCREMENT,
   estacionamiento_id            INTEGER NOT NULL REFERENCES estacionamientos(id),
   habilitado                    INTEGER NOT NULL DEFAULT 0 CHECK (habilitado IN (0, 1)),
-  codigo_postal_fiscal          TEXT NOT NULL,
-  clave_producto_servicio       TEXT NOT NULL DEFAULT '78101803',
-  clave_unidad                  TEXT NOT NULL DEFAULT 'E48',
-  descripcion_servicio          TEXT NOT NULL DEFAULT 'Servicio de estacionamiento',
   UNIQUE (estacionamiento_id)
 );
 

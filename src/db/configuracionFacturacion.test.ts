@@ -13,14 +13,6 @@ beforeEach(() => {
   estacionamientoId = obtenerEstacionamientoActual(db).id
 })
 
-const configEjemplo = {
-  habilitado: true,
-  codigoPostalFiscal: '44100',
-  claveProductoServicio: '78101803',
-  claveUnidad: 'E48',
-  descripcionServicio: 'Servicio de estacionamiento'
-}
-
 describe('obtenerConfiguracionFacturacion', () => {
   it('devuelve null si nunca se configuró', () => {
     expect(obtenerConfiguracionFacturacion(db, estacionamientoId)).toBeNull()
@@ -29,19 +21,13 @@ describe('obtenerConfiguracionFacturacion', () => {
 
 describe('guardarConfiguracionFacturacion', () => {
   it('guarda y se puede volver a leer tal cual', () => {
-    guardarConfiguracionFacturacion(db, estacionamientoId, configEjemplo)
-    expect(obtenerConfiguracionFacturacion(db, estacionamientoId)).toEqual(configEjemplo)
-  })
-
-  it('rechaza un código postal que no tenga 5 dígitos', () => {
-    expect(() =>
-      guardarConfiguracionFacturacion(db, estacionamientoId, { ...configEjemplo, codigoPostalFiscal: '441' })
-    ).toThrow('código postal')
+    guardarConfiguracionFacturacion(db, estacionamientoId, { habilitado: true })
+    expect(obtenerConfiguracionFacturacion(db, estacionamientoId)).toEqual({ habilitado: true })
   })
 
   it('guardar de nuevo actualiza en vez de duplicar', () => {
-    guardarConfiguracionFacturacion(db, estacionamientoId, configEjemplo)
-    guardarConfiguracionFacturacion(db, estacionamientoId, { ...configEjemplo, habilitado: false })
+    guardarConfiguracionFacturacion(db, estacionamientoId, { habilitado: true })
+    guardarConfiguracionFacturacion(db, estacionamientoId, { habilitado: false })
 
     const { n } = db.prepare('SELECT COUNT(*) AS n FROM configuracion_facturacion').get() as { n: number }
     expect(n).toBe(1)

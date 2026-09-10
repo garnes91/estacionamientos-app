@@ -254,10 +254,6 @@ interface RespaldoInfoApi {
 
 interface ConfiguracionFacturacionApi {
   habilitado: boolean
-  codigoPostalFiscal: string
-  claveProductoServicio: string
-  claveUnidad: string
-  descripcionServicio: string
 }
 
 interface ImpresoraApi {

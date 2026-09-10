@@ -1485,29 +1485,19 @@ function TabImpresion({ estacionamientoId, avisar, avisarError }: TabProps): Rea
 }
 
 // ============================================================
-// Facturación — solo lo que FacturAPI necesita y que NO es secreto
-// (código postal fiscal, catálogo SAT, descripción del servicio). El
-// RFC/razón social/régimen fiscal del estacionamiento NO se capturan
-// aquí: no se usan en ningún lado del flujo real, FacturAPI ya conoce al
-// emisor por la organización/llave a la que está ligado el secretKey. El
-// CSD y la llave de FacturAPI en sí tampoco se capturan aquí — viven
-// solo del lado del backend de facturación, nunca en esta computadora.
+// Facturación — solo el interruptor. Todo lo demás (RFC/razón social/
+// régimen del estacionamiento, código postal fiscal, catálogo SAT,
+// descripción del servicio, organizationId, secretKey) vive SOLO en
+// Firestore (facturacionSecretos/{slug}), capturado a mano una sola vez
+// — nada de eso lo usa esta app localmente, así que no tiene caso
+// duplicarlo aquí (se intentó sincronizarlo solo desde aquí y resultó
+// ser una vuelta innecesaria).
 // ============================================================
 interface ConfiguracionFacturacion {
   habilitado: boolean
-  codigoPostalFiscal: string
-  claveProductoServicio: string
-  claveUnidad: string
-  descripcionServicio: string
 }
 
-const FACTURACION_VACIA: ConfiguracionFacturacion = {
-  habilitado: false,
-  codigoPostalFiscal: '',
-  claveProductoServicio: '78101803',
-  claveUnidad: 'E48',
-  descripcionServicio: 'Servicio de estacionamiento'
-}
+const FACTURACION_VACIA: ConfiguracionFacturacion = { habilitado: false }
 
 function TabFacturacion({ estacionamientoId, avisar, avisarError }: TabProps): ReactElement {
   const [config, setConfig] = useState<ConfiguracionFacturacion>(FACTURACION_VACIA)
@@ -1534,58 +1524,27 @@ function TabFacturacion({ estacionamientoId, avisar, avisarError }: TabProps): R
   return (
     <div>
       <p style={{ color: '#666', fontSize: '0.85rem' }}>
-        El RFC/razón social/régimen fiscal de este estacionamiento se configuran directamente en tu cuenta de
-        FacturAPI (la organización ligada a tu Secret Key), no aquí — FacturAPI ya sabe quién es el emisor por eso,
-        nunca por datos que esta app le mande. El certificado de sello digital (CSD) y la Secret Key tampoco se
-        capturan aquí — se dan de alta aparte, directo en Firebase Console (<code>facturacionSecretos</code>).
+        Todos los datos de facturación (RFC/razón social/régimen fiscal, código postal, claves del catálogo SAT,
+        descripción del servicio, y la Secret Key de FacturAPI) se capturan directo en Firebase Console
+        (<code>facturacionSecretos</code>), nunca aquí — FacturAPI ya sabe quién es el emisor por la organización
+        ligada a esa llave. Este interruptor es lo único que necesita esta computadora: decide si se calculan y
+        suben los códigos de autofacturación al cerrar un boleto o registrar un pago de pensionado.
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '0.5rem', alignItems: 'center', maxWidth: 480 }}>
-        <label>Habilitado</label>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
         <input
           type="checkbox"
+          id="facturacion-habilitado"
           checked={config.habilitado}
           onChange={(e) => setConfig({ ...config, habilitado: e.target.checked })}
         />
-
-        <label>Código postal fiscal</label>
-        <input
-          style={inputStyle}
-          placeholder="44100"
-          value={config.codigoPostalFiscal}
-          onChange={(e) => setConfig({ ...config, codigoPostalFiscal: e.target.value })}
-        />
-
-        <label>Clave producto/servicio (SAT)</label>
-        <input
-          style={inputStyle}
-          value={config.claveProductoServicio}
-          onChange={(e) => setConfig({ ...config, claveProductoServicio: e.target.value })}
-        />
-
-        <label>Clave unidad (SAT)</label>
-        <input
-          style={inputStyle}
-          value={config.claveUnidad}
-          onChange={(e) => setConfig({ ...config, claveUnidad: e.target.value })}
-        />
-
-        <label>Descripción del servicio</label>
-        <input
-          style={inputStyle}
-          value={config.descripcionServicio}
-          onChange={(e) => setConfig({ ...config, descripcionServicio: e.target.value })}
-        />
+        <label htmlFor="facturacion-habilitado">Habilitado</label>
       </div>
       <p style={{ color: '#999', fontSize: '0.8rem', maxWidth: 480 }}>
-        Estos 4 campos se suben solos al guardar al proyecto de Firebase de este estacionamiento — así no hay que
-        volver a capturarlos a mano en Firebase Console. La llave de FacturAPI en sí (secretKey/organizationId)
-        sigue siendo 100% manual ahí, nunca sale de Firebase Console.
-      </p>
-      <p style={{ color: '#999', fontSize: '0.8rem', maxWidth: 480 }}>
-        La factura global de "público en general" de cada serie se genera desde el panel del operador
-        (<code>panel-operador/index.html</code>, pestaña "Facturación global"), no desde esta app — la maneja quien
-        decida cuándo facturar lo pendiente (tú o tu contador), no depende de que esta computadora esté prendida.
+        La factura global de "público en general" de cada serie (o de pensionados) se genera desde el panel del
+        operador (<code>panel-operador/index.html</code>, pestaña "Facturación global"), no desde esta app — la
+        maneja quien decida cuándo facturar lo pendiente (tú o tu contador), no depende de que esta computadora
+        esté prendida.
       </p>
 
       <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>

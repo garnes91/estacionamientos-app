@@ -337,16 +337,8 @@ contextBridge.exposeInMainWorld('api', {
     },
     facturacion: {
       obtener: (estacionamientoId: number) => ipcRenderer.invoke('admin:facturacion:obtener', estacionamientoId),
-      guardar: (params: {
-        estacionamientoId: number
-        config: {
-          habilitado: boolean
-          codigoPostalFiscal: string
-          claveProductoServicio: string
-          claveUnidad: string
-          descripcionServicio: string
-        }
-      }) => ipcRenderer.invoke('admin:facturacion:guardar', params)
+      guardar: (params: { estacionamientoId: number; config: { habilitado: boolean } }) =>
+        ipcRenderer.invoke('admin:facturacion:guardar', params)
     },
     respaldo: {
       listar: () => ipcRenderer.invoke('admin:respaldo:listar'),

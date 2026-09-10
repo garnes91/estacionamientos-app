@@ -124,21 +124,15 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Secretos de facturación (organizationId + Secret Key de FacturAPI por
-    // estacionamiento) — nunca legibles desde ningún cliente, solo desde
-    // Cloud Functions con Admin SDK. La app de escritorio (sesión
-    // anónima) sí puede ACTUALIZAR, pero solo estos 4 campos que no son
-    // secretos (ver src/main/facturacionCatalogoSync.ts) — cualquier
-    // intento de tocar organizationId/secretKey desde un cliente queda
-    // negado; esos dos siguen siendo 100% manuales, solo en Firebase
-    // Console. `create` queda negado del todo: si el documento no existe
-    // (nadie dio de alta la cuenta de FacturAPI todavía), no hay nada que
-    // actualizar y no se debe crear uno a medias sin las llaves reales.
+    // Secretos y catálogo de facturación (organizationId, Secret Key de
+    // FacturAPI, código postal fiscal, claves del catálogo SAT,
+    // descripción del servicio) — TODO se captura a mano, una sola vez,
+    // directo en Firebase Console. Ningún cliente (ni la app de
+    // escritorio, ni panel-operador, ni el portal público) necesita leer
+    // ni escribir aquí nunca — solo lo tocan las Cloud Functions con
+    // Admin SDK, que ignoran esta regla.
     match /facturacionSecretos/{slug} {
-      allow read, create: if false;
-      allow update: if request.auth != null &&
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['claveProductoServicio', 'claveUnidad', 'descripcionServicio', 'codigoPostalFiscal']);
+      allow read, write: if false;
     }
 
     // Cualquier otra ruta no contemplada arriba: denegada por defecto.

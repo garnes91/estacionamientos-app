@@ -44,13 +44,7 @@ function registrarPagoDePrueba() {
   })
 }
 
-const configFacturacionEjemplo = {
-  habilitado: true,
-  codigoPostalFiscal: '44100',
-  claveProductoServicio: '78101803',
-  claveUnidad: 'E48',
-  descripcionServicio: 'Servicio de estacionamiento'
-}
+const configFacturacionEjemplo = { habilitado: true }
 
 const configMonitoreoEjemplo = {
   habilitado: true,

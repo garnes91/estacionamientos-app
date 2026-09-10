@@ -45,20 +45,23 @@ export function migrarColumnasFaltantes(db: DB): void {
     'respaldo_nube',
     'respaldo_nube INTEGER NOT NULL DEFAULT 0 CHECK (respaldo_nube IN (0, 1))'
   )
-  agregarColumnaSiFalta(
-    db,
-    'configuracion_facturacion',
-    'descripcion_servicio',
-    "descripcion_servicio TEXT NOT NULL DEFAULT 'Servicio de estacionamiento'"
-  )
-  // rfc/razon_social/regimen_fiscal DEL ESTACIONAMIENTO: se quitaron
-  // porque no se usaban en ningún lado del flujo real de facturación
-  // (FacturAPI ya conoce al emisor por la organización/llave, no por
-  // datos que la app le mande) — eran NOT NULL sin default, así que si
-  // se dejan tal cual, un INSERT nuevo (que ya no los llena) truena.
+  // configuracion_facturacion se redujo a solo "habilitado" — todo lo
+  // demás (RFC/razón social/régimen del estacionamiento, código postal
+  // fiscal, claves del catálogo SAT, descripción del servicio) resultó
+  // no usarse en ningún lado del flujo real: FacturAPI ya conoce al
+  // emisor por la organización/llave, no por datos que la app le mande,
+  // y el catálogo SAT solo lo necesita el Cloud Function (que lee
+  // Firestore, no esta base local) — así que ahora se captura una sola
+  // vez, directo en Firestore (facturacionSecretos/{slug}). Varias de
+  // estas columnas eran NOT NULL sin default, así que si se dejan tal
+  // cual, un INSERT nuevo (que ya no las llena) truena.
   quitarColumnaSiExiste(db, 'configuracion_facturacion', 'rfc')
   quitarColumnaSiExiste(db, 'configuracion_facturacion', 'razon_social')
   quitarColumnaSiExiste(db, 'configuracion_facturacion', 'regimen_fiscal')
+  quitarColumnaSiExiste(db, 'configuracion_facturacion', 'codigo_postal_fiscal')
+  quitarColumnaSiExiste(db, 'configuracion_facturacion', 'clave_producto_servicio')
+  quitarColumnaSiExiste(db, 'configuracion_facturacion', 'clave_unidad')
+  quitarColumnaSiExiste(db, 'configuracion_facturacion', 'descripcion_servicio')
   ampliarRolUsuariosSiHaceFalta(db)
 }
 

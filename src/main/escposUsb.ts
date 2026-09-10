@@ -1,8 +1,21 @@
-import { usb } from 'usb'
+import type { usb as UsbNamespace } from 'usb'
+
+// Import perezoso a propósito: en Windows nunca se llama ninguna función de
+// este archivo (ahí se usa escposWindows.ts en su lugar, ver print.ts), pero
+// un `import` estático de 'usb' carga su binding nativo AL ARRANCAR LA APP
+// sin importar la plataforma — si ese binding no viene empacado para
+// Windows (paquete opcional @node-usb/usb-win32-x64-msvc), tira la app
+// entera con "Cannot find native binding" antes de mostrar ninguna ventana.
+// Cargándolo solo cuando de verdad se necesita (Mac/Linux), Windows nunca
+// toca el paquete nativo.
+async function cargarUsb(): Promise<typeof UsbNamespace> {
+  const { usb } = await import('usb')
+  return usb
+}
 
 // El paquete 'usb' no exporta el tipo UsbDevice directamente (solo el
 // objeto `usb` en sí) — se deriva del propio método en vez de importarlo.
-type DispositivoUsb = Awaited<ReturnType<typeof usb.getDevices>>[number]
+type DispositivoUsb = Awaited<ReturnType<typeof UsbNamespace.getDevices>>[number]
 type InterfazUsb = NonNullable<DispositivoUsb['configuration']>['interfaces'][number]
 type EndpointUsb = InterfazUsb['alternate']['endpoints'][number]
 
@@ -32,6 +45,7 @@ export interface ImpresoraUsb {
 
 /** Lista los dispositivos USB conectados que se anuncian como impresora (clase 7). */
 export async function listarImpresorasUsb(): Promise<ImpresoraUsb[]> {
+  const usb = await cargarUsb()
   const dispositivos = await usb.getDevices()
   return dispositivos
     .filter((d) => buscarInterfazDeImpresora(d) !== undefined)
@@ -46,6 +60,7 @@ export async function listarImpresorasUsb(): Promise<ImpresoraUsb[]> {
  * con Zadig), no el driver de impresora normal.
  */
 export async function enviarCrudo(vendorId: number, productId: number, datos: Buffer): Promise<void> {
+  const usb = await cargarUsb()
   const dispositivo = await usb.findDeviceByIds(vendorId, productId)
   if (!dispositivo) {
     throw new Error(`No se encontró la impresora USB ${vendorId.toString(16)}:${productId.toString(16)} — ¿sigue conectada?`)

@@ -16,6 +16,7 @@ import {
 } from '../db/boletos'
 import { hacerCorte, listarCortes, obtenerDetalleCorte } from '../db/cortes'
 import { obtenerCorteMensual } from '../db/corteMensual'
+import { obtenerIngresosPorMes } from '../db/estadisticas'
 import { alternarModoSoloSerieA, obtenerModoSoloSerieA } from '../db/modoSoloSerieA'
 import { obtenerOCrearClaveFolio } from '../db/claveCifradoFolio'
 import {
@@ -177,6 +178,11 @@ export function registrarIpc(): void {
   ipcMain.handle('cortes:mensual', (_evento, params: { estacionamientoId: number; anio: number; mes: number }) => {
     requerirUsuarioActual()
     return obtenerCorteMensual(obtenerDb(), params.estacionamientoId, params.anio, params.mes)
+  })
+
+  ipcMain.handle('estadisticas:ingresosPorMes', (_evento, estacionamientoId: number) => {
+    requerirUsuarioActual()
+    return obtenerIngresosPorMes(obtenerDb(), estacionamientoId)
   })
 
   ipcMain.handle('modoSoloSerieA:estado', (_evento, estacionamientoId: number) => {

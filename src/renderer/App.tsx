@@ -9,8 +9,17 @@ import { ReautenticarCorte } from './ReautenticarCorte'
 import { Pensionados } from './Pensionados'
 import { Gastos } from './Gastos'
 import { CorteMensual } from './CorteMensual'
+import { Estadisticas } from './Estadisticas'
 
-type Pantalla = 'operacion' | 'admin' | 'boletosAbiertos' | 'corte' | 'pensionados' | 'gastos' | 'corteMensual'
+type Pantalla =
+  | 'operacion'
+  | 'admin'
+  | 'boletosAbiertos'
+  | 'corte'
+  | 'pensionados'
+  | 'gastos'
+  | 'corteMensual'
+  | 'estadisticas'
 
 function App(): ReactElement {
   const [usuario, setUsuario] = useState<UsuarioSesion | null | undefined>(undefined)
@@ -19,6 +28,9 @@ function App(): ReactElement {
   // periodo de una vez) — pide reautenticarse con una cuenta de admin
   // para entrar. El corte del día ya no lo pide (se quitó a propósito).
   const [corteMensualAutorizado, setCorteMensualAutorizado] = useState(false)
+  // Estadísticas expone ingresos/egresos de hasta 13 meses de un vistazo —
+  // mismo criterio de sensibilidad que el corte mensual.
+  const [estadisticasAutorizadas, setEstadisticasAutorizadas] = useState(false)
   const [actualizacionLista, setActualizacionLista] = useState<string | null>(null)
 
   useEffect(() => {
@@ -44,11 +56,17 @@ function App(): ReactElement {
     setUsuario(null)
     setPantalla('operacion')
     setCorteMensualAutorizado(false)
+    setEstadisticasAutorizadas(false)
   }
 
   function volverDeCorteMensual(): void {
     setPantalla('operacion')
     setCorteMensualAutorizado(false)
+  }
+
+  function volverDeEstadisticas(): void {
+    setPantalla('operacion')
+    setEstadisticasAutorizadas(false)
   }
 
   let contenido: ReactElement
@@ -77,6 +95,18 @@ function App(): ReactElement {
     ) : (
       <CorteMensual onVolver={volverDeCorteMensual} />
     )
+  } else if (pantalla === 'estadisticas') {
+    contenido = !estadisticasAutorizadas ? (
+      <ReautenticarCorte
+        soloAdmin
+        titulo="Confirmar identidad de administrador"
+        mensaje="Las estadísticas solo las puede ver un administrador — vuelve a introducir usuario y contraseña de una cuenta admin para continuar."
+        onVerificado={() => setEstadisticasAutorizadas(true)}
+        onCancelar={() => setPantalla('operacion')}
+      />
+    ) : (
+      <Estadisticas onVolver={volverDeEstadisticas} />
+    )
   } else if (pantalla === 'corte') {
     contenido = (
       <CorteCaja nombreUsuario={usuario.nombreCompleto} rol={usuario.rol} onVolver={() => setPantalla('operacion')} />
@@ -92,6 +122,7 @@ function App(): ReactElement {
         onVerPensionados={() => setPantalla('pensionados')}
         onVerGastos={() => setPantalla('gastos')}
         onVerCorteMensual={() => setPantalla('corteMensual')}
+        onVerEstadisticas={() => setPantalla('estadisticas')}
       />
     )
   }

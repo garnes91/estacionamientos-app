@@ -53,7 +53,8 @@ export function OperacionBoletos({
   onVerCorte,
   onVerPensionados,
   onVerGastos,
-  onVerCorteMensual
+  onVerCorteMensual,
+  onVerEstadisticas
 }: {
   usuario: UsuarioSesion
   onCerrarSesion: () => void
@@ -62,6 +63,7 @@ export function OperacionBoletos({
   onVerPensionados: () => void
   onVerGastos: () => void
   onVerCorteMensual: () => void
+  onVerEstadisticas: () => void
   onVerCorte: () => void
 }): ReactElement {
   const [estacionamientoId, setEstacionamientoId] = useState<number | null>(null)
@@ -423,6 +425,7 @@ export function OperacionBoletos({
           <button onClick={onVerPensionados}>Pensionados</button>
           <button onClick={onVerGastos}>Gastos</button>
           {!soloSerieA && <button onClick={onVerCorteMensual}>Corte mensual</button>}
+          {!soloSerieA && <button onClick={onVerEstadisticas}>Estadísticas</button>}
           {!soloSerieA && (
             <span style={{ marginLeft: 'auto', fontSize: '1.1rem', color: '#2e8b45', cursor: 'default' }}>✓</span>
           )}

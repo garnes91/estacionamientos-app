@@ -172,6 +172,9 @@ contextBridge.exposeInMainWorld('api', {
     enviarPorCorreo: (params: { corteId: number; htmlReporte: string }) =>
       ipcRenderer.invoke('correo:enviarCorte', params)
   },
+  estadisticas: {
+    ingresosPorMes: (estacionamientoId: number) => ipcRenderer.invoke('estadisticas:ingresosPorMes', estacionamientoId)
+  },
   pensionados: {
     listar: (params: { estacionamientoId: number; incluirBajas?: boolean }) =>
       ipcRenderer.invoke('pensionados:listar', params),

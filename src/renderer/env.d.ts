@@ -262,6 +262,17 @@ interface ImpresoraApi {
   nombreVisible: string
 }
 
+interface ResultadoMensualApi {
+  anio: number
+  mes: number
+  totalBoletos: number
+  montoBoletos: number
+  montoPensionados: number
+  ingresos: number
+  egresos: number
+  resultadoNeto: number
+}
+
 declare global {
   interface Window {
     api: {
@@ -424,6 +435,9 @@ declare global {
         detalle: (corteId: number) => Promise<DetalleCorteApi>
         mensual: (params: { estacionamientoId: number; anio: number; mes: number }) => Promise<CorteMensualApi>
         enviarPorCorreo: (params: { corteId: number; htmlReporte: string }) => Promise<void>
+      }
+      estadisticas: {
+        ingresosPorMes: (estacionamientoId: number) => Promise<ResultadoMensualApi[]>
       }
       pensionados: {
         listar: (params: { estacionamientoId: number; incluirBajas?: boolean }) => Promise<PensionadoApi[]>

@@ -423,7 +423,7 @@ export function OperacionBoletos({
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem', alignItems: 'center' }}>
           <button style={estiloBotonBarra} onClick={onVerBoletosAbiertos}>
             Ver boletos abiertos
           </button>

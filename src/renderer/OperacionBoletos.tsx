@@ -45,6 +45,10 @@ export interface UsuarioSesion {
 
 const TECLAS_TIPO: Record<string, number> = { F1: 0, F2: 1, F3: 2 }
 
+// Mismo padding/tamaño de letra para que la fila de botones de abajo se vea
+// pareja, aunque el texto de cada uno sea de distinto largo.
+const estiloBotonBarra = { padding: '0.5rem 0.9rem', fontSize: '0.95rem' }
+
 export function OperacionBoletos({
   usuario,
   onCerrarSesion,
@@ -420,12 +424,28 @@ export function OperacionBoletos({
         )}
 
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', alignItems: 'center' }}>
-          <button onClick={onVerBoletosAbiertos}>Ver boletos abiertos</button>
-          <button onClick={onVerCorte}>Corte de caja</button>
-          <button onClick={onVerPensionados}>Pensionados</button>
-          <button onClick={onVerGastos}>Gastos</button>
-          {!soloSerieA && <button onClick={onVerCorteMensual}>Corte mensual</button>}
-          {!soloSerieA && <button onClick={onVerEstadisticas}>Estadísticas</button>}
+          <button style={estiloBotonBarra} onClick={onVerBoletosAbiertos}>
+            Ver boletos abiertos
+          </button>
+          <button style={estiloBotonBarra} onClick={onVerCorte}>
+            Corte de caja
+          </button>
+          <button style={estiloBotonBarra} onClick={onVerPensionados}>
+            Pensionados
+          </button>
+          <button style={estiloBotonBarra} onClick={onVerGastos}>
+            Gastos
+          </button>
+          {!soloSerieA && usuario.rol === 'admin' && (
+            <button style={estiloBotonBarra} onClick={onVerCorteMensual}>
+              Corte mensual
+            </button>
+          )}
+          {!soloSerieA && usuario.rol === 'admin' && (
+            <button style={estiloBotonBarra} onClick={onVerEstadisticas}>
+              Estadísticas
+            </button>
+          )}
           {!soloSerieA && (
             <span style={{ marginLeft: 'auto', fontSize: '1.1rem', color: '#2e8b45', cursor: 'default' }}>✓</span>
           )}

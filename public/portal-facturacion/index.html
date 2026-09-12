@@ -195,9 +195,9 @@
 
   // 'invalid-argument' NO tiene mensaje fijo aquí a propósito: la Cloud
   // Function ya manda en error.message el detalle de qué campo corregir
-  // (ej. "RFC: formato inválido"), tanto si falta algo antes de llamar a
-  // FacturAPI como si FacturAPI rechazó un dato — se muestra tal cual más
-  // abajo (rama `|| No se pudo generar la factura: ${error.message}`).
+  // (ej. "RFC: tiene un formato inválido"), tanto si falta algo antes de
+  // llamar a FacturAPI como si FacturAPI rechazó un dato — se muestra tal
+  // cual, sin el prefijo genérico, para no repetir contexto de más.
   const MENSAJES_ERROR = {
     'not-found': 'No encontramos ese folio. Revisa que lo hayas escrito tal cual aparece impreso — puede tardar unos minutos en aparecer disponible después de pagar.',
     'already-exists': 'Este boleto ya fue facturado. Si tú no lo hiciste, contacta al operador del estacionamiento.',
@@ -229,7 +229,9 @@
       )
       elForm.reset()
     } catch (error) {
-      mostrarMensaje(MENSAJES_ERROR[error.code?.replace('functions/', '')] || `No se pudo generar la factura: ${error.message}`, 'error')
+      const codigo = error.code?.replace('functions/', '')
+      const mensaje = codigo === 'invalid-argument' ? error.message : (MENSAJES_ERROR[codigo] || `No se pudo generar la factura: ${error.message}`)
+      mostrarMensaje(mensaje, 'error')
     } finally {
       elBoton.disabled = false
     }

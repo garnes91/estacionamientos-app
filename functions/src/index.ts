@@ -16,16 +16,24 @@ const CAMPO_AMIGABLE: Record<string, string> = {
   use: 'Uso del CFDI'
 }
 
-/** Arma un mensaje legible para el cliente a partir de un error 4xx de FacturAPI (datos que él mismo puede corregir). */
-function mensajeAmigableFacturapi(error: FacturapiError): string {
+/** FacturAPI antepone "El campo "x.y.z" " a sus mensajes — ya lo decimos nosotros con el nombre amigable, no hace falta repetirlo. */
+function limpiarMensajeCampo(mensaje: string): string {
+  return mensaje.replace(/^El campo "[^"]+"\s*/i, '').trim() || 'dato inválido'
+}
+
+/**
+ * Arma un mensaje legible para el cliente a partir de un error 4xx de
+ * FacturAPI — mostrando SOLO los campos que el cliente mismo capturó en el
+ * formulario (RFC, régimen fiscal, etc.), nunca detalles internos como el
+ * precio del producto: esos no los puede corregir el cliente y solo lo
+ * confunden. Si ningún error corresponde a un campo suyo, regresa null para
+ * que el llamador use el mensaje genérico.
+ */
+function mensajeAmigableFacturapi(error: FacturapiError): string | null {
   const detalles = error.errors && error.errors.length > 0 ? error.errors : [{ path: error.path, message: error.message }]
-  return detalles
-    .map((d) => {
-      const campo = d.path ? (CAMPO_AMIGABLE[d.path] ?? d.path) : null
-      const mensaje = d.message?.trim() || 'dato inválido'
-      return campo ? `${campo}: ${mensaje}` : mensaje
-    })
-    .join(' — ')
+  const propios = detalles.filter((d): d is { path: string; message?: string } => !!d.path && d.path in CAMPO_AMIGABLE)
+  if (propios.length === 0) return null
+  return propios.map((d) => `${CAMPO_AMIGABLE[d.path]}: ${limpiarMensajeCampo(d.message ?? '')}`).join(' — ')
 }
 
 export { crearFacturaGlobalMensual } from './facturaGlobalMensual'
@@ -190,7 +198,8 @@ export const crearFacturaIndividual = onCall(async (request) => {
     // Un 5xx o cualquier otro error es un problema de nuestro lado o de
     // FacturAPI, no algo que el cliente pueda corregir — mensaje genérico.
     if (error instanceof FacturapiError && error.status >= 400 && error.status < 500) {
-      throw new HttpsError('invalid-argument', mensajeAmigableFacturapi(error))
+      const mensaje = mensajeAmigableFacturapi(error)
+      if (mensaje) throw new HttpsError('invalid-argument', mensaje)
     }
     throw new HttpsError('internal', 'No se pudo generar la factura. Intenta de nuevo más tarde.')
   }

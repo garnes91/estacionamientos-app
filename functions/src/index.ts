@@ -1,7 +1,32 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
-import Facturapi from 'facturapi'
+import Facturapi, { FacturapiError } from 'facturapi'
 import { db } from './firestore'
 import { obtenerSecretosFacturacion } from './secretosFacturacion'
+
+// Nombres de campo tal como los manda FacturAPI en sus errores de validación
+// (`error.path` / `error.errors[].path`) traducidos a como los ve el cliente
+// en el formulario del portal — así el mensaje de error le dice qué corregir
+// en vez de un "Error" genérico.
+const CAMPO_AMIGABLE: Record<string, string> = {
+  'customer.tax_id': 'RFC',
+  'customer.legal_name': 'Razón social / nombre',
+  'customer.tax_system': 'Régimen fiscal',
+  'customer.email': 'Correo',
+  'customer.address.zip': 'Código postal',
+  use: 'Uso del CFDI'
+}
+
+/** Arma un mensaje legible para el cliente a partir de un error 4xx de FacturAPI (datos que él mismo puede corregir). */
+function mensajeAmigableFacturapi(error: FacturapiError): string {
+  const detalles = error.errors && error.errors.length > 0 ? error.errors : [{ path: error.path, message: error.message }]
+  return detalles
+    .map((d) => {
+      const campo = d.path ? (CAMPO_AMIGABLE[d.path] ?? d.path) : null
+      const mensaje = d.message?.trim() || 'dato inválido'
+      return campo ? `${campo}: ${mensaje}` : mensaje
+    })
+    .join(' — ')
+}
 
 export { crearFacturaGlobalMensual } from './facturaGlobalMensual'
 export { crearFacturaGlobalMensualPensionados } from './pensionadosFacturaGlobalMensual'
@@ -160,6 +185,13 @@ export const crearFacturaIndividual = onCall(async (request) => {
     await item.ref.update({ facturado: false, facturaEstado: 'error' })
     console.error(`[facturacion] error al timbrar código ${codigoImpreso} de ${slug}:`, error)
     if (error instanceof HttpsError) throw error
+    // Un 4xx de FacturAPI es un dato mal capturado por el cliente (RFC,
+    // régimen fiscal, etc.) — se le puede decir exactamente qué está mal.
+    // Un 5xx o cualquier otro error es un problema de nuestro lado o de
+    // FacturAPI, no algo que el cliente pueda corregir — mensaje genérico.
+    if (error instanceof FacturapiError && error.status >= 400 && error.status < 500) {
+      throw new HttpsError('invalid-argument', mensajeAmigableFacturapi(error))
+    }
     throw new HttpsError('internal', 'No se pudo generar la factura. Intenta de nuevo más tarde.')
   }
 })

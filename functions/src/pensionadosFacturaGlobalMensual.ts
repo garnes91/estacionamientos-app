@@ -4,6 +4,7 @@ import Facturapi from 'facturapi'
 import { db } from './firestore'
 import { obtenerSecretosFacturacion } from './secretosFacturacion'
 import { obtenerCorreoDestinatarios } from './correoDestinatarios'
+import { formatearFecha } from './formatearFecha'
 
 interface CrearFacturaGlobalPensionadosInput {
   slug: string
@@ -74,13 +75,21 @@ export const crearFacturaGlobalMensualPensionados = onRequest({ cors: true }, as
     return
   }
 
+  interface PagoAFacturar {
+    ref: FirebaseFirestore.DocumentReference
+    monto: number
+    pensionadoNombre: string
+    periodoDesde: unknown
+    periodoHasta: unknown
+  }
+
   let montoTotal = 0
-  let refsAFacturar: FirebaseFirestore.DocumentReference[] = []
+  let pagosAFacturar: PagoAFacturar[] = []
 
   try {
     await db.runTransaction(async (tx) => {
       montoTotal = 0
-      refsAFacturar = []
+      pagosAFacturar = []
       // Se vuelve a leer cada doc DENTRO de la transacción (no se confía en
       // el snapshot del query de arriba) por si cambió algo entre el query
       // y aquí — ej. el pensionado ya lo facturó individual justo en medio.
@@ -90,14 +99,20 @@ export const crearFacturaGlobalMensualPensionados = onRequest({ cors: true }, as
         const datos = snap.data()!
         if (datos.facturado) continue
         montoTotal += datos.monto as number
-        refsAFacturar.push(snap.ref)
+        pagosAFacturar.push({
+          ref: snap.ref,
+          monto: datos.monto as number,
+          pensionadoNombre: (datos.pensionadoNombre as string) || 'Pensionado',
+          periodoDesde: datos.periodoDesde,
+          periodoHasta: datos.periodoHasta
+        })
       }
-      for (const ref of refsAFacturar) {
-        tx.update(ref, { facturado: true, facturaEstado: 'en_proceso' })
+      for (const pago of pagosAFacturar) {
+        tx.update(pago.ref, { facturado: true, facturaEstado: 'en_proceso' })
       }
     })
 
-    if (refsAFacturar.length === 0) {
+    if (pagosAFacturar.length === 0) {
       const resultado: ResultadoFacturaGlobal = { folioFiscal: null, cantidadPagos: 0, montoTotal: 0 }
       res.status(200).json(resultado)
       return
@@ -106,6 +121,8 @@ export const crearFacturaGlobalMensualPensionados = onRequest({ cors: true }, as
     const secretos = await obtenerSecretosFacturacion(slug)
     const facturapi = new Facturapi(secretos.secretKey)
 
+    // Un renglón POR PAGO (no un solo total sumado) — así el desglose real
+    // queda en el CFDI, no solo en Firestore.
     const factura = await facturapi.invoices.create({
       customer: {
         legal_name: 'PUBLICO EN GENERAL',
@@ -113,19 +130,17 @@ export const crearFacturaGlobalMensualPensionados = onRequest({ cors: true }, as
         tax_system: '616',
         address: { zip: secretos.codigoPostalFiscal }
       },
-      items: [
-        {
-          quantity: 1,
-          product: {
-            description: `${secretos.descripcionServicio || 'Servicio de estacionamiento'} — factura global de pensionados, generada ${new Date().toISOString().slice(0, 10)}`,
-            product_key: secretos.claveProductoServicio,
-            unit_key: secretos.claveUnidad,
-            price: montoTotal,
-            tax_included: true,
-            taxes: [{ type: 'IVA', rate: 0.16 }]
-          }
+      items: pagosAFacturar.map((pago) => ({
+        quantity: 1,
+        product: {
+          description: `${secretos.descripcionServicio || 'Servicio de estacionamiento'} — pensión ${pago.pensionadoNombre}, ${formatearFecha(pago.periodoDesde)} a ${formatearFecha(pago.periodoHasta)}`,
+          product_key: secretos.claveProductoServicio,
+          unit_key: secretos.claveUnidad,
+          price: pago.monto,
+          tax_included: true,
+          taxes: [{ type: 'IVA', rate: 0.16 }]
         }
-      ],
+      })),
       use: 'S01', // Sin efectos fiscales — obligatorio para receptor genérico
       payment_form: '01', // Efectivo
       payment_method: 'PUE'
@@ -140,12 +155,12 @@ export const crearFacturaGlobalMensualPensionados = onRequest({ cors: true }, as
     }
 
     await Promise.all(
-      refsAFacturar.map((ref) => ref.update({ facturaEstado: 'completado', facturaFolioFiscal: factura.uuid }))
+      pagosAFacturar.map((pago) => pago.ref.update({ facturaEstado: 'completado', facturaFolioFiscal: factura.uuid }))
     )
 
     const resultado: ResultadoFacturaGlobal = {
       folioFiscal: factura.uuid,
-      cantidadPagos: refsAFacturar.length,
+      cantidadPagos: pagosAFacturar.length,
       montoTotal
     }
     res.status(200).json(resultado)
@@ -153,7 +168,7 @@ export const crearFacturaGlobalMensualPensionados = onRequest({ cors: true }, as
     // Deshace el "facturado" de los que sí se alcanzaron a marcar, para que
     // el siguiente intento manual los vuelva a tomar en cuenta.
     await Promise.all(
-      refsAFacturar.map((ref) => ref.update({ facturado: false, facturaEstado: 'error' }).catch(() => {}))
+      pagosAFacturar.map((pago) => pago.ref.update({ facturado: false, facturaEstado: 'error' }).catch(() => {}))
     )
     console.error(`[facturacion] error en factura global de pensionados de ${slug}:`, error)
     res.status(500).json({ error: 'No se pudo generar la factura global' })

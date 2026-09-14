@@ -4,6 +4,7 @@ import Facturapi from 'facturapi'
 import { db } from './firestore'
 import { obtenerSecretosFacturacion } from './secretosFacturacion'
 import { obtenerCorreoDestinatarios } from './correoDestinatarios'
+import { formatearFecha } from './formatearFecha'
 
 interface CrearFacturaGlobalInput {
   slug: string
@@ -88,13 +89,19 @@ export const crearFacturaGlobalMensual = onRequest({ cors: true }, async (req, r
     return
   }
 
+  interface BoletoAFacturar {
+    ref: FirebaseFirestore.DocumentReference
+    monto: number
+    fecha: unknown
+  }
+
   let montoTotal = 0
-  let refsAFacturar: FirebaseFirestore.DocumentReference[] = []
+  let boletosAFacturar: BoletoAFacturar[] = []
 
   try {
     await db.runTransaction(async (tx) => {
       montoTotal = 0
-      refsAFacturar = []
+      boletosAFacturar = []
       // Se vuelve a leer cada doc DENTRO de la transacción (no se confía en
       // el snapshot del query de arriba) por si cambió algo entre el query
       // y aquí — ej. alguien lo facturó individual justo en medio.
@@ -104,14 +111,14 @@ export const crearFacturaGlobalMensual = onRequest({ cors: true }, async (req, r
         const datos = snap.data()!
         if (datos.facturado) continue
         montoTotal += datos.monto as number
-        refsAFacturar.push(snap.ref)
+        boletosAFacturar.push({ ref: snap.ref, monto: datos.monto as number, fecha: datos.fecha })
       }
-      for (const ref of refsAFacturar) {
-        tx.update(ref, { facturado: true, facturaEstado: 'en_proceso' })
+      for (const boleto of boletosAFacturar) {
+        tx.update(boleto.ref, { facturado: true, facturaEstado: 'en_proceso' })
       }
     })
 
-    if (refsAFacturar.length === 0) {
+    if (boletosAFacturar.length === 0) {
       const resultado: ResultadoFacturaGlobal = { folioFiscal: null, cantidadBoletos: 0, montoTotal: 0 }
       res.status(200).json(resultado)
       return
@@ -123,6 +130,8 @@ export const crearFacturaGlobalMensual = onRequest({ cors: true }, async (req, r
     // OJO: verificar los nombres exactos de campos contra la documentación
     // viva de FacturAPI al conectar la primera cuenta real — igual que en
     // crearFacturaIndividual.ts, no se ha probado contra la API real.
+    // Un renglón POR BOLETO (no un solo total sumado) — así el desglose
+    // real queda en el CFDI, no solo en Firestore.
     const factura = await facturapi.invoices.create({
       customer: {
         legal_name: 'PUBLICO EN GENERAL',
@@ -130,19 +139,17 @@ export const crearFacturaGlobalMensual = onRequest({ cors: true }, async (req, r
         tax_system: '616',
         address: { zip: secretos.codigoPostalFiscal }
       },
-      items: [
-        {
-          quantity: 1,
-          product: {
-            description: `${secretos.descripcionServicio || 'Servicio de estacionamiento'} — factura global serie ${serie}, generada ${new Date().toISOString().slice(0, 10)}`,
-            product_key: secretos.claveProductoServicio,
-            unit_key: secretos.claveUnidad,
-            price: montoTotal,
-            tax_included: true,
-            taxes: [{ type: 'IVA', rate: 0.16 }]
-          }
+      items: boletosAFacturar.map((boleto) => ({
+        quantity: 1,
+        product: {
+          description: `${secretos.descripcionServicio || 'Servicio de estacionamiento'} — boleto serie ${serie}, ${formatearFecha(boleto.fecha)}`,
+          product_key: secretos.claveProductoServicio,
+          unit_key: secretos.claveUnidad,
+          price: boleto.monto,
+          tax_included: true,
+          taxes: [{ type: 'IVA', rate: 0.16 }]
         }
-      ],
+      })),
       use: 'S01', // Sin efectos fiscales — obligatorio para receptor genérico
       payment_form: '01', // Efectivo
       payment_method: 'PUE'
@@ -159,16 +166,16 @@ export const crearFacturaGlobalMensual = onRequest({ cors: true }, async (req, r
     }
 
     await Promise.all(
-      refsAFacturar.map((ref) => ref.update({ facturaEstado: 'completado', facturaFolioFiscal: factura.uuid }))
+      boletosAFacturar.map((boleto) => boleto.ref.update({ facturaEstado: 'completado', facturaFolioFiscal: factura.uuid }))
     )
 
-    const resultado: ResultadoFacturaGlobal = { folioFiscal: factura.uuid, cantidadBoletos: refsAFacturar.length, montoTotal }
+    const resultado: ResultadoFacturaGlobal = { folioFiscal: factura.uuid, cantidadBoletos: boletosAFacturar.length, montoTotal }
     res.status(200).json(resultado)
   } catch (error) {
     // Deshace el "facturado" de los que sí se alcanzaron a marcar, para que
     // el siguiente intento manual los vuelva a tomar en cuenta.
     await Promise.all(
-      refsAFacturar.map((ref) => ref.update({ facturado: false, facturaEstado: 'error' }).catch(() => {}))
+      boletosAFacturar.map((boleto) => boleto.ref.update({ facturado: false, facturaEstado: 'error' }).catch(() => {}))
     )
     console.error(`[facturacion] error en factura global de ${slug} serie ${serie}:`, error)
     res.status(500).json({ error: 'No se pudo generar la factura global' })

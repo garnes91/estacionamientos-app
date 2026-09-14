@@ -2,6 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import Facturapi, { FacturapiError } from 'facturapi'
 import { db } from './firestore'
 import { obtenerSecretosFacturacion } from './secretosFacturacion'
+import { formatearFecha } from './formatearFecha'
 
 // Nombres de campo tal como los manda FacturAPI en sus errores de validación
 // (`error.path` / `error.errors[].path`) traducidos a como los ve el cliente
@@ -76,11 +77,6 @@ interface ItemFacturable {
   monto: number
   descripcion: string
   ref: FirebaseFirestore.DocumentReference
-}
-
-function formatearFecha(valor: unknown): string {
-  const fecha = typeof (valor as { toDate?: () => Date })?.toDate === 'function' ? (valor as { toDate: () => Date }).toDate() : new Date(valor as string)
-  return fecha.toLocaleDateString('es-MX')
 }
 
 /**

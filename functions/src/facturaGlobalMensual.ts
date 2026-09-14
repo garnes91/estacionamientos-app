@@ -43,7 +43,7 @@ function inicioMesActual(): Date {
  * un llamado repetido o mal intencionado adelanta una facturación real que
  * de todas formas iba a pasar — nunca inventa ni duplica montos.
  */
-export const crearFacturaGlobalMensual = onRequest(async (req, res) => {
+export const crearFacturaGlobalMensual = onRequest({ cors: true }, async (req, res) => {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
     return

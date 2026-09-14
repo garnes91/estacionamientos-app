@@ -33,7 +33,7 @@ function inicioMesActual(): Date {
  * facturar, desde panel-operador/index.html (pestaña "Facturación
  * global" → botón "Facturar pensionados pendientes").
  */
-export const crearFacturaGlobalMensualPensionados = onRequest(async (req, res) => {
+export const crearFacturaGlobalMensualPensionados = onRequest({ cors: true }, async (req, res) => {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
     return

@@ -147,6 +147,14 @@ export const crearFacturaGlobalMensual = onRequest({ cors: true }, async (req, r
       payment_method: 'PUE'
     })
 
+    // Es "público en general" — no hay un cliente a quien ya se le mandó
+    // sola (a diferencia de crearFacturaIndividual). Si se configuró un
+    // correo de destino (ver secretosFacturacion.ts), se le manda ahí; si
+    // no, la factura queda generada pero solo accesible desde FacturAPI.
+    if (secretos.correoDestino) {
+      await facturapi.invoices.sendByEmail(factura.id, { email: secretos.correoDestino })
+    }
+
     await Promise.all(
       refsAFacturar.map((ref) => ref.update({ facturaEstado: 'completado', facturaFolioFiscal: factura.uuid }))
     )

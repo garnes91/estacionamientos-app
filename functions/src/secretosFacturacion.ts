@@ -16,6 +16,13 @@ import { db } from './firestore'
  *                           app, tab Facturación) — lo necesita la factura global mensual porque,
  *                           por regla del SAT, el domicilio del receptor en un CFDI a público en
  *                           general (RFC XAXX010101000) debe ser el CP del propio emisor
+ *   correoDestino         — OPCIONAL. La factura individual ya se manda sola al correo que teclea
+ *                           el cliente en el portal, pero la factura GLOBAL mensual (crearFactura-
+ *                           GlobalMensual/...Pensionados) es para público en general — no hay un
+ *                           cliente a quien mandársela. Si se captura este campo, ahí se manda (ej.
+ *                           el correo del dueño o del contador) para que no quede solo guardada
+ *                           adentro de FacturAPI. Si se deja vacío, la función solo la genera y
+ *                           regresa el folio fiscal, sin enviar nada.
  *
  * Reglas de Firestore (ver firestore.rules en la raíz del repo) bloquean
  * cualquier lectura/escritura de cliente sobre esta colección — solo el
@@ -28,6 +35,7 @@ export interface SecretosFacturacion {
   claveUnidad: string
   descripcionServicio: string
   codigoPostalFiscal: string
+  correoDestino?: string
 }
 
 export async function obtenerSecretosFacturacion(slug: string): Promise<SecretosFacturacion> {

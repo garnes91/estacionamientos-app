@@ -130,6 +130,13 @@ export const crearFacturaGlobalMensualPensionados = onRequest({ cors: true }, as
       payment_method: 'PUE'
     })
 
+    // Igual que en facturaGlobalMensual.ts: es "público en general", no hay
+    // un cliente a quien ya se le mandó sola — si hay correoDestino
+    // configurado, ahí se manda.
+    if (secretos.correoDestino) {
+      await facturapi.invoices.sendByEmail(factura.id, { email: secretos.correoDestino })
+    }
+
     await Promise.all(
       refsAFacturar.map((ref) => ref.update({ facturaEstado: 'completado', facturaFolioFiscal: factura.uuid }))
     )

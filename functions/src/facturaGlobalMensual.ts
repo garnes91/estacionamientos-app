@@ -3,6 +3,7 @@ import { getAuth } from 'firebase-admin/auth'
 import Facturapi from 'facturapi'
 import { db } from './firestore'
 import { obtenerSecretosFacturacion } from './secretosFacturacion'
+import { obtenerCorreoDestinatarios } from './correoDestinatarios'
 
 interface CrearFacturaGlobalInput {
   slug: string
@@ -148,11 +149,13 @@ export const crearFacturaGlobalMensual = onRequest({ cors: true }, async (req, r
     })
 
     // Es "público en general" — no hay un cliente a quien ya se le mandó
-    // sola (a diferencia de crearFacturaIndividual). Si se configuró un
-    // correo de destino (ver secretosFacturacion.ts), se le manda ahí; si
-    // no, la factura queda generada pero solo accesible desde FacturAPI.
-    if (secretos.correoDestino) {
-      await facturapi.invoices.sendByEmail(factura.id, { email: secretos.correoDestino })
+    // sola (a diferencia de crearFacturaIndividual). Por default se manda a
+    // los mismos destinatarios que ya reciben el corte de caja (la app los
+    // sincroniza sola en cada latido); `correoDestino` en
+    // facturacionSecretos, si está presente, manda ahí en vez de eso.
+    const destinatarios = secretos.correoDestino ? [secretos.correoDestino] : await obtenerCorreoDestinatarios(slug)
+    if (destinatarios.length > 0) {
+      await facturapi.invoices.sendByEmail(factura.id, { email: destinatarios })
     }
 
     await Promise.all(

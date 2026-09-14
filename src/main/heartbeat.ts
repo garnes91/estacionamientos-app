@@ -6,6 +6,7 @@ import { obtenerEstacionamientoActual } from '../db/estacionamientos'
 import { obtenerResumen } from '../db/boletos'
 import { listarCortes } from '../db/cortes'
 import { obtenerConfiguracionMonitoreo, ConfiguracionMonitoreo } from '../db/configuracionMonitoreo'
+import { obtenerConfiguracionCorreo } from '../db/configuracionCorreo'
 import { aplicarConfigSincronizable, construirConfigSincronizable, ConfigSincronizable } from '../db/configSincronizacion'
 import { codificarValorFirestore, decodificarValorFirestore, obtenerDocumento, parchearDocumento } from './firestoreRest'
 
@@ -17,6 +18,7 @@ export interface DatosLatido {
   entradasDesdeUltimoCorte: number
   ultimoCorteMonto: number | null
   ultimoCorteFecha: string | null
+  correoDestinatarios: string | null
 }
 
 function calcularDatosLatido(db: DB, estacionamientoId: number): DatosLatido {
@@ -29,7 +31,13 @@ function calcularDatosLatido(db: DB, estacionamientoId: number): DatosLatido {
     actualmenteDentro: resumen.actualmenteDentro,
     entradasDesdeUltimoCorte: resumen.entradasDesdeUltimoCorte,
     ultimoCorteMonto: ultimoCorte?.totalMonto ?? null,
-    ultimoCorteFecha: ultimoCorte?.hasta ?? null
+    ultimoCorteFecha: ultimoCorte?.hasta ?? null,
+    // Se sube (nunca la contraseña SMTP, solo a quién le llegan los
+    // reportes) para que la factura global de FacturAPI pueda mandarse
+    // sola a los mismos destinatarios, sin volver a capturarlos aparte en
+    // facturacionSecretos — ver crearFacturaGlobalMensual en el repo de
+    // Cloud Functions.
+    correoDestinatarios: obtenerConfiguracionCorreo(db, estacionamientoId)?.destinatarios ?? null
   }
 }
 
@@ -45,6 +53,7 @@ async function enviarLatido(config: ConfiguracionMonitoreo, datos: DatosLatido, 
     actualizadoEn: { timestampValue: new Date().toISOString() },
     ultimoCorteMonto: datos.ultimoCorteMonto == null ? { nullValue: null } : { doubleValue: datos.ultimoCorteMonto },
     ultimoCorteFecha: datos.ultimoCorteFecha == null ? { nullValue: null } : { timestampValue: datos.ultimoCorteFecha },
+    correoDestinatarios: datos.correoDestinatarios == null ? { nullValue: null } : { stringValue: datos.correoDestinatarios },
     configActual: codificarValorFirestore(configActual)
   })
 }

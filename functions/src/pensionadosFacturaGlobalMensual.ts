@@ -3,6 +3,7 @@ import { getAuth } from 'firebase-admin/auth'
 import Facturapi from 'facturapi'
 import { db } from './firestore'
 import { obtenerSecretosFacturacion } from './secretosFacturacion'
+import { obtenerCorreoDestinatarios } from './correoDestinatarios'
 
 interface CrearFacturaGlobalPensionadosInput {
   slug: string
@@ -130,11 +131,12 @@ export const crearFacturaGlobalMensualPensionados = onRequest({ cors: true }, as
       payment_method: 'PUE'
     })
 
-    // Igual que en facturaGlobalMensual.ts: es "público en general", no hay
-    // un cliente a quien ya se le mandó sola — si hay correoDestino
-    // configurado, ahí se manda.
-    if (secretos.correoDestino) {
-      await facturapi.invoices.sendByEmail(factura.id, { email: secretos.correoDestino })
+    // Igual que en facturaGlobalMensual.ts: por default se manda a los
+    // mismos destinatarios del corte de caja; correoDestino en
+    // facturacionSecretos, si está presente, manda ahí en vez de eso.
+    const destinatarios = secretos.correoDestino ? [secretos.correoDestino] : await obtenerCorreoDestinatarios(slug)
+    if (destinatarios.length > 0) {
+      await facturapi.invoices.sendByEmail(factura.id, { email: destinatarios })
     }
 
     await Promise.all(

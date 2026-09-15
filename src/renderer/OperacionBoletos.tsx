@@ -73,6 +73,7 @@ export function OperacionBoletos({
   const [estacionamientoId, setEstacionamientoId] = useState<number | null>(null)
   const [nombreEstacionamiento, setNombreEstacionamiento] = useState('')
   const [textoBoleto, setTextoBoleto] = useState<string | null>(null)
+  const [textoLegalBoleto, setTextoLegalBoleto] = useState<string | null>(null)
   const [claveFolio, setClaveFolio] = useState('')
   const [slugFacturacion, setSlugFacturacion] = useState<string | null>(null)
   const [tipos, setTipos] = useState<TipoVehiculo[]>([])
@@ -109,6 +110,7 @@ export function OperacionBoletos({
       setEstacionamientoId(estacionamiento.id)
       setNombreEstacionamiento(estacionamiento.nombre)
       setTextoBoleto(estacionamiento.textoBoleto)
+      setTextoLegalBoleto(estacionamiento.textoLegalBoleto)
       setClaveFolio(estacionamiento.claveFolio)
       setSlugFacturacion(estacionamiento.slugFacturacion)
 
@@ -146,6 +148,7 @@ export function OperacionBoletos({
       setUltimoEmitido({
         estacionamientoNombre: nombreEstacionamiento,
         textoBoleto,
+        textoLegalBoleto,
         serie: emitido.serie,
         folio: emitido.folio,
         tipoVehiculo: tipos.find((t) => t.id === tipoVehiculoId)?.nombre ?? '',
@@ -180,7 +183,7 @@ export function OperacionBoletos({
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [tipos, cargando, estacionamientoId, placa, nombreEstacionamiento, textoBoleto, tarifasPlanas])
+  }, [tipos, cargando, estacionamientoId, placa, nombreEstacionamiento, textoBoleto, textoLegalBoleto, tarifasPlanas])
 
   // Atajo de emergencia (cualquier usuario, no solo admin): Ctrl+Shift+A
   // apaga de golpe todas las series salvo A (ej. se acabaron los boletos
@@ -220,6 +223,7 @@ export function OperacionBoletos({
       setUltimoCobro({
         estacionamientoNombre: nombreEstacionamiento,
         textoBoleto,
+        textoLegalBoleto,
         serie: cierre.serie,
         folio: cierre.folio,
         tipoCobro: cierre.tipoCobro,

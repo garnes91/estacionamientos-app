@@ -286,6 +286,7 @@ declare global {
         id: number
         nombre: string
         textoBoleto: string | null
+        textoLegalBoleto: string | null
         cargoBoletoPerdido: number
         umbralRecobroSospechoso: number
         claveFolio: string
@@ -307,6 +308,7 @@ declare global {
               datos: {
                 estacionamientoNombre: string
                 textoBoleto: string | null
+                textoLegalBoleto: string | null
                 serie: string
                 folio: number
                 tipoVehiculo: string
@@ -321,6 +323,7 @@ declare global {
               datos: {
                 estacionamientoNombre: string
                 textoBoleto: string | null
+                textoLegalBoleto: string | null
                 serie: string
                 folio: number
                 tipoCobro: 'regular' | 'plana'
@@ -500,6 +503,7 @@ declare global {
         }
         estacionamiento: {
           actualizarTextoBoleto: (params: { estacionamientoId: number; texto: string | null }) => Promise<void>
+          actualizarTextoLegalBoleto: (params: { estacionamientoId: number; texto: string | null }) => Promise<void>
           actualizarNombre: (params: { estacionamientoId: number; nombre: string }) => Promise<void>
           actualizarCargoBoletoPerdido: (params: { estacionamientoId: number; monto: number }) => Promise<void>
           actualizarUmbralRecobroSospechoso: (params: { estacionamientoId: number; umbral: number }) => Promise<void>

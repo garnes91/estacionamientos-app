@@ -770,6 +770,7 @@ function TabSeries({ estacionamientoId, avisar, avisarError, esAdmin }: TabProps
 function TabTextoBoleto({ estacionamientoId, avisar, avisarError }: TabProps): ReactElement {
   const [nombre, setNombre] = useState('')
   const [texto, setTexto] = useState('')
+  const [textoLegal, setTextoLegal] = useState('')
   const [cargoBoletoPerdido, setCargoBoletoPerdido] = useState(0)
   const [umbralRecobroSospechoso, setUmbralRecobroSospechoso] = useState(2)
 
@@ -777,6 +778,7 @@ function TabTextoBoleto({ estacionamientoId, avisar, avisarError }: TabProps): R
     window.api.estacionamientoActual().then((e) => {
       setNombre(e.nombre)
       setTexto(e.textoBoleto ?? '')
+      setTextoLegal(e.textoLegalBoleto ?? '')
       setCargoBoletoPerdido(e.cargoBoletoPerdido)
       setUmbralRecobroSospechoso(e.umbralRecobroSospechoso)
     })
@@ -795,6 +797,18 @@ function TabTextoBoleto({ estacionamientoId, avisar, avisarError }: TabProps): R
     try {
       await window.api.admin.estacionamiento.actualizarTextoBoleto({ estacionamientoId, texto: texto.trim() || null })
       avisar('Texto del boleto guardado')
+    } catch (e) {
+      avisarError(e)
+    }
+  }
+
+  async function guardarTextoLegal(): Promise<void> {
+    try {
+      await window.api.admin.estacionamiento.actualizarTextoLegalBoleto({
+        estacionamientoId,
+        texto: textoLegal.trim() || null
+      })
+      avisar('Texto legal del boleto guardado')
     } catch (e) {
       avisarError(e)
     }
@@ -847,6 +861,23 @@ function TabTextoBoleto({ estacionamientoId, avisar, avisarError }: TabProps): R
         style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'monospace', padding: '0.5rem' }}
       />
       <button onClick={guardarTexto} style={{ marginTop: '0.5rem' }}>
+        Guardar
+      </button>
+
+      <h3>Texto legal del boleto</h3>
+      <p style={{ color: '#666', fontSize: '0.85rem' }}>
+        Se imprime AL FINAL del boleto de entrada y del recibo de cobro (después del código de barras y el esquema
+        del coche) — pólizas de responsabilidad civil, límites de cobertura, cláusulas de adhesión, etc. Alineado a
+        la izquierda, como un bloque legal normal (a diferencia del texto de arriba, que sale centrado junto al
+        nombre).
+      </p>
+      <textarea
+        value={textoLegal}
+        onChange={(e) => setTextoLegal(e.target.value)}
+        rows={10}
+        style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'monospace', fontSize: '0.8rem', padding: '0.5rem' }}
+      />
+      <button onClick={guardarTextoLegal} style={{ marginTop: '0.5rem' }}>
         Guardar
       </button>
 

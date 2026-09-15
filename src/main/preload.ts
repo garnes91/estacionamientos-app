@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('api', {
           datos: {
             estacionamientoNombre: string
             textoBoleto: string | null
+            textoLegalBoleto: string | null
             serie: string
             folio: number
             tipoVehiculo: string
@@ -50,6 +51,7 @@ contextBridge.exposeInMainWorld('api', {
           datos: {
             estacionamientoNombre: string
             textoBoleto: string | null
+            textoLegalBoleto: string | null
             serie: string
             folio: number
             tipoCobro: 'regular' | 'plana'
@@ -243,6 +245,8 @@ contextBridge.exposeInMainWorld('api', {
     estacionamiento: {
       actualizarTextoBoleto: (params: { estacionamientoId: number; texto: string | null }) =>
         ipcRenderer.invoke('admin:estacionamiento:actualizarTextoBoleto', params),
+      actualizarTextoLegalBoleto: (params: { estacionamientoId: number; texto: string | null }) =>
+        ipcRenderer.invoke('admin:estacionamiento:actualizarTextoLegalBoleto', params),
       actualizarNombre: (params: { estacionamientoId: number; nombre: string }) =>
         ipcRenderer.invoke('admin:estacionamiento:actualizarNombre', params),
       actualizarCargoBoletoPerdido: (params: { estacionamientoId: number; monto: number }) =>

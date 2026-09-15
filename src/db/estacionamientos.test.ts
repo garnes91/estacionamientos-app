@@ -5,6 +5,7 @@ import {
   actualizarCargoBoletoPerdido,
   actualizarNombreEstacionamiento,
   actualizarTextoBoleto,
+  actualizarTextoLegalBoleto,
   actualizarUmbralRecobroSospechoso,
   obtenerEstacionamientoActual
 } from './estacionamientos'
@@ -32,6 +33,26 @@ describe('actualizarTextoBoleto', () => {
     actualizarTextoBoleto(db, estacionamientoId, 'algo')
     actualizarTextoBoleto(db, estacionamientoId, null)
     expect(obtenerEstacionamientoActual(db).textoBoleto).toBeNull()
+  })
+})
+
+describe('actualizarTextoLegalBoleto', () => {
+  it('empieza en null (sin configurar)', () => {
+    expect(obtenerEstacionamientoActual(db).textoLegalBoleto).toBeNull()
+  })
+
+  it('guarda el texto y se refleja en obtenerEstacionamientoActual, independiente de textoBoleto', () => {
+    actualizarTextoBoleto(db, estacionamientoId, 'Texto de arriba')
+    actualizarTextoLegalBoleto(db, estacionamientoId, 'Cláusula 1.- ...\nCláusula 2.- ...')
+    const estacionamiento = obtenerEstacionamientoActual(db)
+    expect(estacionamiento.textoLegalBoleto).toBe('Cláusula 1.- ...\nCláusula 2.- ...')
+    expect(estacionamiento.textoBoleto).toBe('Texto de arriba')
+  })
+
+  it('se puede volver a limpiar pasando null', () => {
+    actualizarTextoLegalBoleto(db, estacionamientoId, 'algo')
+    actualizarTextoLegalBoleto(db, estacionamientoId, null)
+    expect(obtenerEstacionamientoActual(db).textoLegalBoleto).toBeNull()
   })
 })
 

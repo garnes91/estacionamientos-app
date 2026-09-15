@@ -23,6 +23,12 @@ CREATE TABLE IF NOT EXISTS estacionamientos (
   -- mano por instalación desde la configuración de admin; NULL hasta
   -- entonces.
   texto_boleto  TEXT,
+  -- Texto legal (pólizas, límites de responsabilidad, cláusulas de
+  -- adhesión) que se imprime AL FINAL del boleto, después del código de
+  -- barras y el esquema del coche — a diferencia de texto_boleto, que
+  -- sale arriba junto al nombre. Igual de opcional/libre, capturado a
+  -- mano por instalación.
+  texto_legal_boleto TEXT,
   -- Cargo fijo extra que se suma al cobro normal cuando el cliente perdió
   -- su boleto de papel (ver cerrarBoletoPerdido en src/db/boletos.ts).
   cargo_boleto_perdido REAL NOT NULL DEFAULT 0,

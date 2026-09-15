@@ -6,6 +6,7 @@ import { CodigoQR } from './CodigoQR'
 export interface DatosReciboCobro {
   estacionamientoNombre: string
   textoBoleto: string | null
+  textoLegalBoleto: string | null
   serie: string
   folio: number
   tipoCobro: 'regular' | 'plana'
@@ -72,6 +73,12 @@ export function ReciboCobro({
           <CodigoQR texto={urlFacturacion(slugFacturacion, textoFolio)} />
           <div style={{ textAlign: 'center', fontSize: 10 }}>Escanea para facturar</div>
         </div>
+      )}
+      {datos.textoLegalBoleto && (
+        <>
+          <hr />
+          <div style={{ textAlign: 'left', whiteSpace: 'pre-line', fontSize: 10 }}>{datos.textoLegalBoleto}</div>
+        </>
       )}
     </div>
   )

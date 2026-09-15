@@ -167,6 +167,7 @@ function cortar(avance = 50): Buffer {
 export interface DatosBoletoImprimibleEscpos {
   estacionamientoNombre: string
   textoBoleto: string | null
+  textoLegalBoleto: string | null
   serie: string
   folio: number
   tipoVehiculo: string
@@ -200,6 +201,12 @@ export function construirTicketEntrada(datos: DatosBoletoImprimibleEscpos, clave
   partes.push(linea())
   partes.push(texto('Marcar daños visibles al ingresar:', { centrado: true }))
   partes.push(imagenEsquemaCoche())
+  if (datos.textoLegalBoleto) {
+    partes.push(linea())
+    for (const l of datos.textoLegalBoleto.split('\n')) {
+      partes.push(texto(l))
+    }
+  }
   partes.push(cortar())
 
   return Buffer.concat(partes)
@@ -208,6 +215,7 @@ export function construirTicketEntrada(datos: DatosBoletoImprimibleEscpos, clave
 export interface DatosReciboCobroEscpos {
   estacionamientoNombre: string
   textoBoleto: string | null
+  textoLegalBoleto: string | null
   serie: string
   folio: number
   tipoCobro: 'regular' | 'plana'
@@ -259,6 +267,12 @@ export function construirTicketCobro(datos: DatosReciboCobroEscpos, claveFolio: 
   }
   partes.push(linea())
   partes.push(texto(`Total: $${datos.monto.toFixed(2)}`, { negrita: true }))
+  if (datos.textoLegalBoleto) {
+    partes.push(linea())
+    for (const l of datos.textoLegalBoleto.split('\n')) {
+      partes.push(texto(l))
+    }
+  }
   partes.push(cortar())
 
   return Buffer.concat(partes)

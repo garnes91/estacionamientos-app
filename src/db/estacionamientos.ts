@@ -4,6 +4,7 @@ export interface Estacionamiento {
   id: number
   nombre: string
   textoBoleto: string | null
+  textoLegalBoleto: string | null
   cargoBoletoPerdido: number
   umbralRecobroSospechoso: number
 }
@@ -12,8 +13,8 @@ export interface Estacionamiento {
 export function obtenerEstacionamientoActual(db: DB): Estacionamiento {
   const fila = db
     .prepare(
-      `SELECT id, nombre, texto_boleto AS textoBoleto, cargo_boleto_perdido AS cargoBoletoPerdido,
-              umbral_recobro_sospechoso AS umbralRecobroSospechoso
+      `SELECT id, nombre, texto_boleto AS textoBoleto, texto_legal_boleto AS textoLegalBoleto,
+              cargo_boleto_perdido AS cargoBoletoPerdido, umbral_recobro_sospechoso AS umbralRecobroSospechoso
        FROM estacionamientos WHERE activo = 1 ORDER BY id LIMIT 1`
     )
     .get() as Estacionamiento | undefined
@@ -27,6 +28,11 @@ export function obtenerEstacionamientoActual(db: DB): Estacionamiento {
 
 export function actualizarTextoBoleto(db: DB, estacionamientoId: number, texto: string | null): void {
   db.prepare('UPDATE estacionamientos SET texto_boleto = ? WHERE id = ?').run(texto, estacionamientoId)
+}
+
+/** Texto legal (pólizas, cláusulas) que se imprime al final del boleto, después del código de barras y el esquema del coche. */
+export function actualizarTextoLegalBoleto(db: DB, estacionamientoId: number, texto: string | null): void {
+  db.prepare('UPDATE estacionamientos SET texto_legal_boleto = ? WHERE id = ?').run(texto, estacionamientoId)
 }
 
 /** Cargo fijo extra que se suma al cobro normal al cerrar un "boleto perdido". */

@@ -8,6 +8,7 @@ import esquemaCoche from './assets/esquema-coche.jpg?inline'
 export interface DatosBoletoImprimible {
   estacionamientoNombre: string
   textoBoleto: string | null
+  textoLegalBoleto: string | null
   serie: string
   folio: number
   tipoVehiculo: string
@@ -93,6 +94,12 @@ export function BoletoImprimible({
           />
         )}
       </div>
+      {datos.textoLegalBoleto && (
+        <>
+          <hr />
+          <div style={{ textAlign: 'left', whiteSpace: 'pre-line', fontSize: 10 }}>{datos.textoLegalBoleto}</div>
+        </>
+      )}
     </div>
   )
 }

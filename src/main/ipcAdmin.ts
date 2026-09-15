@@ -13,6 +13,7 @@ import {
   actualizarCargoBoletoPerdido,
   actualizarNombreEstacionamiento,
   actualizarTextoBoleto,
+  actualizarTextoLegalBoleto,
   actualizarUmbralRecobroSospechoso,
   obtenerEstacionamientoActual
 } from '../db/estacionamientos'
@@ -143,6 +144,14 @@ export function registrarIpcAdmin(): void {
     (_evento, params: { estacionamientoId: number; texto: string | null }) => {
       requerirAdmin()
       actualizarTextoBoleto(obtenerDb(), params.estacionamientoId, params.texto)
+    }
+  )
+
+  ipcMain.handle(
+    'admin:estacionamiento:actualizarTextoLegalBoleto',
+    (_evento, params: { estacionamientoId: number; texto: string | null }) => {
+      requerirAdmin()
+      actualizarTextoLegalBoleto(obtenerDb(), params.estacionamientoId, params.texto)
     }
   )
 

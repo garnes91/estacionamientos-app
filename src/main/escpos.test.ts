@@ -18,6 +18,7 @@ describe('construirTicketEntrada', () => {
   const datosBase = {
     estacionamientoNombre: 'Estación Central',
     textoBoleto: null,
+    textoLegalBoleto: null,
     serie: 'A',
     folio: 176,
     tipoVehiculo: 'Auto',
@@ -97,12 +98,35 @@ describe('construirTicketEntrada', () => {
     const finImagen = posicionImagen + encabezadoImagen.length + anchoBytes * ESQUEMA_COCHE_ALTO
     expect(buffer.indexOf(Buffer.from([0x1d, 0x56, 66]), finImagen)).toBeGreaterThanOrEqual(finImagen)
   })
+
+  it('sin textoLegalBoleto, no imprime nada extra después del esquema', () => {
+    const buffer = construirTicketEntrada(datosBase, CLAVE_FOLIO)
+    expect(buffer.indexOf(iconv.encode('Responsabilidad', 'cp850'))).toBe(-1)
+  })
+
+  it('con textoLegalBoleto, lo imprime AL FINAL (después del esquema, antes del corte), línea por línea', () => {
+    const buffer = construirTicketEntrada(
+      { ...datosBase, textoLegalBoleto: 'Línea 1 de responsabilidad\nLínea 2 de cobertura' },
+      CLAVE_FOLIO
+    )
+    const posEsquema = buffer.indexOf(iconv.encode('Marcar daños visibles al ingresar:', 'cp850'))
+    const posLinea1 = buffer.indexOf(iconv.encode('Línea 1 de responsabilidad', 'cp850'))
+    const posLinea2 = buffer.indexOf(iconv.encode('Línea 2 de cobertura', 'cp850'))
+
+    expect(posEsquema).toBeGreaterThanOrEqual(0)
+    // Después del esquema, y antes de los últimos 4 bytes (el corte final GS V 66 n).
+    expect(posLinea1).toBeGreaterThan(posEsquema)
+    expect(posLinea1).toBeLessThan(buffer.length - 4)
+    expect(posLinea2).toBeGreaterThan(posLinea1)
+    expect(buffer.subarray(buffer.length - 4)).toEqual(Buffer.from([0x1d, 0x56, 66, 50]))
+  })
 })
 
 describe('construirTicketCobro', () => {
   const datosBase = {
     estacionamientoNombre: 'Estación Central',
     textoBoleto: null,
+    textoLegalBoleto: null,
     serie: 'A',
     folio: 176,
     tipoCobro: 'regular' as const,
@@ -162,6 +186,16 @@ describe('construirTicketCobro', () => {
     ])
     expect(buffer.indexOf(comandoGuardarDatos)).toBeGreaterThanOrEqual(0)
     expect(buffer.indexOf(iconv.encode('Escanea para facturar', 'cp850'))).toBeGreaterThanOrEqual(0)
+  })
+
+  it('con textoLegalBoleto, lo imprime AL FINAL (después del total), antes del corte', () => {
+    const buffer = construirTicketCobro({ ...datosBase, textoLegalBoleto: 'Aviso legal del recibo' }, CLAVE_FOLIO)
+    const posTotal = buffer.indexOf(iconv.encode('Total: $40.00', 'cp850'))
+    const posLegal = buffer.indexOf(iconv.encode('Aviso legal del recibo', 'cp850'))
+
+    expect(posLegal).toBeGreaterThan(posTotal)
+    expect(posLegal).toBeLessThan(buffer.length - 4)
+    expect(buffer.subarray(buffer.length - 4)).toEqual(Buffer.from([0x1d, 0x56, 66, 50]))
   })
 })
 

@@ -18,7 +18,6 @@ export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactEl
   const [estacionamientoId, setEstacionamientoId] = useState<number | null>(null)
   const [nombreEstacionamiento, setNombreEstacionamiento] = useState('')
   const [textoBoleto, setTextoBoleto] = useState<string | null>(null)
-  const [textoLegalBoleto, setTextoLegalBoleto] = useState<string | null>(null)
   const [cargoBoletoPerdido, setCargoBoletoPerdido] = useState(0)
   const [slugFacturacion, setSlugFacturacion] = useState<string | null>(null)
   const [codigoFactura, setCodigoFactura] = useState<string | null>(null)
@@ -39,7 +38,6 @@ export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactEl
       setEstacionamientoId(e.id)
       setNombreEstacionamiento(e.nombre)
       setTextoBoleto(e.textoBoleto)
-      setTextoLegalBoleto(e.textoLegalBoleto)
       setCargoBoletoPerdido(e.cargoBoletoPerdido)
       setSlugFacturacion(e.slugFacturacion)
       cargar(e.id).catch((err) => setError(String(err)))
@@ -79,10 +77,6 @@ export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactEl
       setUltimoCobro({
         estacionamientoNombre: nombreEstacionamiento,
         textoBoleto,
-        textoLegalBoleto,
-        marcador: cierre.marcador,
-        serie: cierre.serie,
-        folio: cierre.folio,
         tipoCobro: cierre.tipoCobro,
         minutosTotales: cierre.minutosTotales,
         monto: cierre.monto,

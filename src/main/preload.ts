@@ -50,10 +50,6 @@ contextBridge.exposeInMainWorld('api', {
           datos: {
             estacionamientoNombre: string
             textoBoleto: string | null
-            textoLegalBoleto: string | null
-            marcador: string | null
-            serie: string
-            folio: number
             tipoCobro: 'regular' | 'plana'
             minutosTotales: number
             monto: number

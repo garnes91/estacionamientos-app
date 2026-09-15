@@ -224,10 +224,6 @@ export function OperacionBoletos({
       setUltimoCobro({
         estacionamientoNombre: nombreEstacionamiento,
         textoBoleto,
-        textoLegalBoleto,
-        marcador: cierre.marcador,
-        serie: cierre.serie,
-        folio: cierre.folio,
         tipoCobro: cierre.tipoCobro,
         minutosTotales: cierre.minutosTotales,
         monto: cierre.monto,

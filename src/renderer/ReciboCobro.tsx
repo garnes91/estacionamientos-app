@@ -1,15 +1,10 @@
 import type { ReactElement } from 'react'
-import { formatearFolioImpreso } from '../logic/folioBarcode'
 import { urlFacturacion } from '../logic/urlFacturacion'
 import { CodigoQR } from './CodigoQR'
 
 export interface DatosReciboCobro {
   estacionamientoNombre: string
   textoBoleto: string | null
-  textoLegalBoleto: string | null
-  marcador: string | null
-  serie: string
-  folio: number
   tipoCobro: 'regular' | 'plana'
   minutosTotales: number
   monto: number
@@ -23,6 +18,11 @@ export interface DatosReciboCobro {
  * en tarifa plana, el fijo más el excedente) para que quede claro ante un
  * reclamo. Se imprime igual que el boleto de entrada (outerHTML de este
  * elemento vía src/main/print.ts).
+ *
+ * A propósito NO lleva el folio ni el texto legal del boleto — a pedido
+ * del usuario, esa información solo va en el boleto de entrada
+ * (BoletoImprimible.tsx); este recibo solo identifica el pago por su
+ * código de facturación, si aplica.
  */
 export function ReciboCobro({
   datos,
@@ -31,12 +31,11 @@ export function ReciboCobro({
 }: {
   datos: DatosReciboCobro
   // Código de facturación propio del boleto (ver formatearCodigoFacturacionBoleto
-  // en src/logic/folioBarcode.ts) — desligado del folio, null si facturación no
-  // está habilitada o no hay proyecto Firebase configurado.
+  // en src/logic/folioBarcode.ts) — null si facturación no está habilitada o no
+  // hay proyecto Firebase configurado.
   codigoFactura: string | null
   slugFacturacion: string | null
 }): ReactElement {
-  const textoFolio = formatearFolioImpreso(datos.marcador, datos.serie, datos.folio)
   const recargoBoletoPerdido = datos.recargoBoletoPerdido ?? 0
   // El desglose por tiempo/tarifa plana es siempre sobre el cálculo normal —
   // el recargo por boleto perdido se muestra aparte, no mezclado ahí.
@@ -51,8 +50,6 @@ export function ReciboCobro({
       )}
       <hr />
       <div style={{ textAlign: 'center' }}>Recibo de pago</div>
-      <div>Folio: {textoFolio}</div>
-      <hr />
       {datos.tipoCobro === 'regular' ? (
         <div>
           Tiempo: {datos.minutosTotales} min — ${montoSinRecargo.toFixed(2)}
@@ -80,12 +77,6 @@ export function ReciboCobro({
             </>
           )}
         </div>
-      )}
-      {datos.textoLegalBoleto && (
-        <>
-          <hr />
-          <div style={{ textAlign: 'left', whiteSpace: 'pre-line', fontSize: 10 }}>{datos.textoLegalBoleto}</div>
-        </>
       )}
     </div>
   )

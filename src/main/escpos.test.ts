@@ -131,10 +131,6 @@ describe('construirTicketCobro', () => {
   const datosBase = {
     estacionamientoNombre: 'Estación Central',
     textoBoleto: null,
-    textoLegalBoleto: null,
-    marcador: '*',
-    serie: 'A',
-    folio: 176,
     tipoCobro: 'regular' as const,
     minutosTotales: 60,
     monto: 40
@@ -146,9 +142,9 @@ describe('construirTicketCobro', () => {
     expect(buffer.indexOf(iconv.encode('Total: $40.00', 'cp850'))).toBeGreaterThanOrEqual(0)
   })
 
-  it('el folio impreso es el real (marcador + folio, sin cifrar)', () => {
+  it('no imprime el folio — a pedido del usuario, este recibo solo lleva el código de facturación, si aplica', () => {
     const buffer = construirTicketCobro(datosBase)
-    expect(buffer.indexOf(Buffer.from('Folio: *000176', 'ascii'))).toBeGreaterThanOrEqual(0)
+    expect(buffer.indexOf(iconv.encode('Folio', 'cp850'))).toBe(-1)
   })
 
   it('con recargo de boleto perdido: lo desglosa aparte del cálculo normal', () => {
@@ -200,13 +196,8 @@ describe('construirTicketCobro', () => {
     expect(buffer.indexOf(iconv.encode('Escanea para facturar', 'cp850'))).toBeGreaterThanOrEqual(0)
   })
 
-  it('con textoLegalBoleto, lo imprime AL FINAL (después del total), antes del corte', () => {
-    const buffer = construirTicketCobro({ ...datosBase, textoLegalBoleto: 'Aviso legal del recibo' })
-    const posTotal = buffer.indexOf(iconv.encode('Total: $40.00', 'cp850'))
-    const posLegal = buffer.indexOf(iconv.encode('Aviso legal del recibo', 'cp850'))
-
-    expect(posLegal).toBeGreaterThan(posTotal)
-    expect(posLegal).toBeLessThan(buffer.length - 4)
+  it('termina con el comando de corte justo después del total (o del código de factura, si lo hay)', () => {
+    const buffer = construirTicketCobro(datosBase)
     expect(buffer.subarray(buffer.length - 4)).toEqual(Buffer.from([0x1d, 0x56, 66, 50]))
   })
 })

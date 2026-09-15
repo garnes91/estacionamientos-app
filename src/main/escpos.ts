@@ -216,10 +216,6 @@ export function construirTicketEntrada(datos: DatosBoletoImprimibleEscpos): Buff
 export interface DatosReciboCobroEscpos {
   estacionamientoNombre: string
   textoBoleto: string | null
-  textoLegalBoleto: string | null
-  marcador: string | null
-  serie: string
-  folio: number
   tipoCobro: 'regular' | 'plana'
   minutosTotales: number
   monto: number
@@ -227,16 +223,21 @@ export interface DatosReciboCobroEscpos {
   excedenteMonto?: number
   recargoBoletoPerdido?: number
   // Código de facturación propio del boleto (ver formatearCodigoFacturacionBoleto
-  // en src/logic/folioBarcode.ts) — desligado del folio, null si facturación
-  // no está habilitada o no hay proyecto Firebase configurado.
+  // en src/logic/folioBarcode.ts) — null si facturación no está habilitada o no
+  // hay proyecto Firebase configurado.
   codigoFactura?: string | null
   // Slug de "Monitoreo en la nube" — con esto se arma la URL del QR al
   // portal de autofacturación, ver urlFacturacion().
   slugFacturacion?: string | null
 }
 
+/**
+ * A propósito NO lleva el folio ni el texto legal del boleto — a pedido del
+ * usuario, esa información solo va en el boleto de entrada
+ * (construirTicketEntrada); este recibo solo identifica el pago por su
+ * código de facturación, si aplica.
+ */
 export function construirTicketCobro(datos: DatosReciboCobroEscpos): Buffer {
-  const textoFolio = formatearFolioImpreso(datos.marcador, datos.serie, datos.folio)
   const recargoBoletoPerdido = datos.recargoBoletoPerdido ?? 0
   const montoSinRecargo = datos.monto - recargoBoletoPerdido
   const montoFijo = datos.tipoCobro === 'plana' ? montoSinRecargo - (datos.excedenteMonto ?? 0) : null
@@ -251,7 +252,6 @@ export function construirTicketCobro(datos: DatosReciboCobroEscpos): Buffer {
 
   partes.push(linea())
   partes.push(texto('Recibo de pago', { centrado: true }))
-  partes.push(texto(`Folio: ${textoFolio}`))
   partes.push(linea())
 
   if (datos.tipoCobro === 'regular') {
@@ -265,20 +265,13 @@ export function construirTicketCobro(datos: DatosReciboCobroEscpos): Buffer {
   if (recargoBoletoPerdido) {
     partes.push(texto(`Recargo boleto perdido: $${recargoBoletoPerdido.toFixed(2)}`))
   }
-  partes.push(barcode(textoFolio))
+  partes.push(linea())
+  partes.push(texto(`Total: $${datos.monto.toFixed(2)}`, { negrita: true }))
   if (datos.codigoFactura) {
     partes.push(texto(`Código de factura: ${datos.codigoFactura}`))
     if (datos.slugFacturacion) {
       partes.push(qrCode(urlFacturacion(datos.slugFacturacion, datos.codigoFactura)))
       partes.push(texto('Escanea para facturar', { centrado: true }))
-    }
-  }
-  partes.push(linea())
-  partes.push(texto(`Total: $${datos.monto.toFixed(2)}`, { negrita: true }))
-  if (datos.textoLegalBoleto) {
-    partes.push(linea())
-    for (const l of datos.textoLegalBoleto.split('\n')) {
-      partes.push(texto(l))
     }
   }
   partes.push(cortar())

@@ -40,6 +40,12 @@ export async function sincronizarBoletoCerrado(db: DB, estacionamientoId: number
 
     await parchearDocumento(firebase, `estacionamientos/${firebase.slug}/boletosFacturables/${codigoImpreso}`, {
       serie: { stringValue: boleto.serie },
+      // Folio REAL (sin cifrar) — solo para que la factura global lo
+      // muestre desglosado por boleto (ver crearFacturaGlobalMensual en el
+      // repo de Cloud Functions). No es sensible como el código cifrado de
+      // arriba: nunca se expone al público, solo va dentro del CFDI que
+      // recibe el dueño/contador.
+      folio: { integerValue: String(boleto.folio) },
       monto: { doubleValue: boleto.monto },
       fecha: { timestampValue: boleto.horaSalida },
       facturado: { booleanValue: false }

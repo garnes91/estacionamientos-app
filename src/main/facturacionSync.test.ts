@@ -97,6 +97,7 @@ describe('sincronizarBoletoCerrado', () => {
 
     const cuerpo = JSON.parse((opciones as RequestInit).body as string)
     expect(cuerpo.fields.serie.stringValue).toBe(cierre.serie)
+    expect(cuerpo.fields.folio.integerValue).toBe(String(cierre.folio))
     expect(cuerpo.fields.monto.doubleValue).toBe(cierre.monto)
     expect(cuerpo.fields.facturado.booleanValue).toBe(false)
   })

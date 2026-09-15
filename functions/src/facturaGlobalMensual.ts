@@ -93,6 +93,7 @@ export const crearFacturaGlobalMensual = onRequest({ cors: true }, async (req, r
     ref: FirebaseFirestore.DocumentReference
     monto: number
     fecha: unknown
+    folio: number | null
   }
 
   let montoTotal = 0
@@ -111,7 +112,14 @@ export const crearFacturaGlobalMensual = onRequest({ cors: true }, async (req, r
         const datos = snap.data()!
         if (datos.facturado) continue
         montoTotal += datos.monto as number
-        boletosAFacturar.push({ ref: snap.ref, monto: datos.monto as number, fecha: datos.fecha })
+        boletosAFacturar.push({
+          ref: snap.ref,
+          monto: datos.monto as number,
+          fecha: datos.fecha,
+          // Boletos sincronizados ANTES de este cambio no traen folio —
+          // se cae al formato anterior (con fecha) para esos casos.
+          folio: typeof datos.folio === 'number' ? datos.folio : null
+        })
       }
       for (const boleto of boletosAFacturar) {
         tx.update(boleto.ref, { facturado: true, facturaEstado: 'en_proceso' })
@@ -142,7 +150,14 @@ export const crearFacturaGlobalMensual = onRequest({ cors: true }, async (req, r
       items: boletosAFacturar.map((boleto) => ({
         quantity: 1,
         product: {
-          description: `${secretos.descripcionServicio || 'Servicio de estacionamiento'} — boleto serie ${serie}, ${formatearFecha(boleto.fecha)}`,
+          // Folio REAL (sin cifrar) — a diferencia del código que trae
+          // impreso el boleto (ese sí cifrado, por antifraude), aquí no
+          // hay riesgo: este texto solo lo ve el dueño/contador dentro del
+          // CFDI, nunca el cliente.
+          description:
+            boleto.folio != null
+              ? `${secretos.descripcionServicio || 'Servicio de estacionamiento'} — Boleto ${serie}-${boleto.folio}`
+              : `${secretos.descripcionServicio || 'Servicio de estacionamiento'} — boleto serie ${serie}, ${formatearFecha(boleto.fecha)}`,
           product_key: secretos.claveProductoServicio,
           unit_key: secretos.claveUnidad,
           price: boleto.monto,

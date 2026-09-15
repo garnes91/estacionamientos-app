@@ -15,6 +15,7 @@ interface ResultadoFacturaGlobal {
   folioFiscal: string | null
   cantidadBoletos: number
   montoTotal: number
+  foliosSinExplicar: number[]
 }
 
 function inicioMesActual(): Date {
@@ -22,6 +23,62 @@ function inicioMesActual(): Date {
   fecha.setUTCDate(1)
   fecha.setUTCHours(0, 0, 0, 0)
   return fecha
+}
+
+/**
+ * El SAT exige que los folios de una serie sean consecutivos — un hueco en
+ * la secuencia solo es válido si corresponde a un boleto que YA se facturó
+ * por su cuenta (individual, desde el portal, o en un corte global
+ * anterior). Revisa el rango [folio mínimo, folio máximo] de lo que se está
+ * facturando ahora y, para cada folio que falte ahí, busca su documento en
+ * Firestore:
+ *   - No existe, o existe pero sigue `facturado:false` de un mes YA
+ *     cerrado (no debería pasar nunca, la query principal ya lo hubiera
+ *     tomado en esta misma corrida) → SIN EXPLICAR, se reporta.
+ *   - `facturado:true` → ya se facturó por su cuenta, hueco explicado.
+ *   - `facturado:false` pero de un mes AÚN EN CURSO → todavía no le toca
+ *     (el cliente sigue teniendo ese mes completo para pedir su factura
+ *     individual), hueco explicado.
+ * Nunca bloquea la facturación — es información para que el dueño/contador
+ * revise, no una regla dura del código (que no puede saber, por ejemplo, si
+ * un folio faltante corresponde a un boleto perdido/cancelado).
+ */
+async function buscarFoliosSinExplicar(
+  slug: string,
+  serie: string,
+  limiteMesActual: Date,
+  boletosAFacturar: { folio: number | null }[]
+): Promise<number[]> {
+  const folios = boletosAFacturar.map((b) => b.folio).filter((f): f is number => f != null)
+  if (folios.length < 2) return []
+
+  const folioMin = Math.min(...folios)
+  const folioMax = Math.max(...folios)
+  const presentes = new Set(folios)
+  const huecos: number[] = []
+  for (let f = folioMin; f <= folioMax; f++) {
+    if (!presentes.has(f)) huecos.push(f)
+  }
+  if (huecos.length === 0) return []
+
+  const coleccion = db.collection(`estacionamientos/${slug}/boletosFacturables`)
+  const sinExplicar: number[] = []
+  for (const folio of huecos) {
+    const snap = await coleccion.where('serie', '==', serie).where('folio', '==', folio).limit(1).get()
+    if (snap.empty) {
+      sinExplicar.push(folio)
+      continue
+    }
+    const datos = snap.docs[0].data()
+    if (datos.facturado === true) continue // ya facturado por su cuenta — explicado
+
+    const fecha = datos.fecha
+    const fechaDate = typeof fecha?.toDate === 'function' ? fecha.toDate() : new Date(fecha)
+    if (fechaDate >= limiteMesActual) continue // del mes en curso, aún no le toca — explicado
+
+    sinExplicar.push(folio)
+  }
+  return sinExplicar
 }
 
 /**
@@ -84,7 +141,7 @@ export const crearFacturaGlobalMensual = onRequest({ cors: true }, async (req, r
   })
 
   if (elegibles.length === 0) {
-    const resultado: ResultadoFacturaGlobal = { folioFiscal: null, cantidadBoletos: 0, montoTotal: 0 }
+    const resultado: ResultadoFacturaGlobal = { folioFiscal: null, cantidadBoletos: 0, montoTotal: 0, foliosSinExplicar: [] }
     res.status(200).json(resultado)
     return
   }
@@ -127,7 +184,7 @@ export const crearFacturaGlobalMensual = onRequest({ cors: true }, async (req, r
     })
 
     if (boletosAFacturar.length === 0) {
-      const resultado: ResultadoFacturaGlobal = { folioFiscal: null, cantidadBoletos: 0, montoTotal: 0 }
+      const resultado: ResultadoFacturaGlobal = { folioFiscal: null, cantidadBoletos: 0, montoTotal: 0, foliosSinExplicar: [] }
       res.status(200).json(resultado)
       return
     }
@@ -184,7 +241,14 @@ export const crearFacturaGlobalMensual = onRequest({ cors: true }, async (req, r
       boletosAFacturar.map((boleto) => boleto.ref.update({ facturaEstado: 'completado', facturaFolioFiscal: factura.uuid }))
     )
 
-    const resultado: ResultadoFacturaGlobal = { folioFiscal: factura.uuid, cantidadBoletos: boletosAFacturar.length, montoTotal }
+    const foliosSinExplicar = await buscarFoliosSinExplicar(slug, serie, limiteMesActual, boletosAFacturar)
+
+    const resultado: ResultadoFacturaGlobal = {
+      folioFiscal: factura.uuid,
+      cantidadBoletos: boletosAFacturar.length,
+      montoTotal,
+      foliosSinExplicar
+    }
     res.status(200).json(resultado)
   } catch (error) {
     // Deshace el "facturado" de los que sí se alcanzaron a marcar, para que

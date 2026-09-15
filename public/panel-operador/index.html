@@ -132,6 +132,7 @@
   .resultado { font-size: 0.85rem; margin-top: 0.3rem; }
   .resultado.exito { color: var(--status-good); }
   .resultado.error { color: var(--status-critical); }
+  .resultado .advertencia-folios { display: block; margin-top: 0.3rem; color: var(--status-warning); }
 
   @media (max-width: 480px) {
     body { padding: 1rem; }
@@ -1330,7 +1331,13 @@
         elResultado.textContent = 'Nada pendiente de facturar en esta serie.'
       } else {
         elResultado.className = 'resultado exito'
-        elResultado.textContent = `Listo — ${datos.cantidadBoletos} boletos por $${Number(datos.montoTotal).toFixed(2)}, folio fiscal ${datos.folioFiscal}.`
+        const mensajeExito = `Listo — ${datos.cantidadBoletos} boletos por $${Number(datos.montoTotal).toFixed(2)}, folio fiscal ${datos.folioFiscal}.`
+        const folios = datos.foliosSinExplicar || []
+        const advertencia =
+          folios.length > 0
+            ? `<span class="advertencia-folios">⚠ Folio${folios.length > 1 ? 's' : ''} sin explicar en la secuencia de esta serie (ni facturados, ni del mes en curso): ${folios.map((f) => `${serie}-${f}`).join(', ')} — revisa si son boletos perdidos/cancelados o si algo no se sincronizó.</span>`
+            : ''
+        elResultado.innerHTML = `${mensajeExito}${advertencia}`
       }
     } catch (e) {
       elResultado.className = 'resultado error'

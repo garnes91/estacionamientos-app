@@ -76,17 +76,28 @@ CREATE TABLE IF NOT EXISTS tipos_vehiculo (
 -- contador_emitidos y proporcion alimentan el reparto round-robin ponderado
 -- entre series; la lógica de asignación vive en /src/logic, esta tabla solo
 -- guarda el estado (siguiente número disponible y cuántos van emitidos).
+--
+-- marcador: símbolo corto (ver MARCADORES_DISPONIBLES en
+-- src/logic/folioBarcode.ts) que sustituye a la letra de la serie en el
+-- folio IMPRESO/escaneado — el SAT exige que ese folio sea el número
+-- secuencial real, sin cifrar, pero la letra de serie tampoco se muestra
+-- directo (ver formatearFolioImpreso). Único por estacionamiento para que
+-- dos series nunca impriman algo ambiguo.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS series_folio (
   id                  INTEGER PRIMARY KEY AUTOINCREMENT,
   estacionamiento_id  INTEGER NOT NULL REFERENCES estacionamientos(id),
   serie               TEXT NOT NULL,
+  marcador            TEXT,
   proporcion          INTEGER NOT NULL CHECK (proporcion > 0),
   siguiente_numero    INTEGER NOT NULL DEFAULT 1,
   contador_emitidos   INTEGER NOT NULL DEFAULT 0,
   activo              INTEGER NOT NULL DEFAULT 1 CHECK (activo IN (0, 1)),
   UNIQUE (estacionamiento_id, serie)
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_series_folio_marcador_unico
+  ON series_folio (estacionamiento_id, marcador);
 
 -- ============================================================
 -- Tarifa progresiva — cabecera por tipo de vehículo, versionada en el tiempo.
@@ -345,11 +356,14 @@ CREATE TABLE IF NOT EXISTS estado_solo_serie_a (
 );
 
 -- ============================================================
--- Clave del cifrado Feistel del folio impreso/escaneado (ver
--- src/logic/folioCifrado.ts) — para que un cliente no pueda inferir el
--- volumen de boletos comparando su folio con el de otro. Se genera sola la
--- primera vez que hace falta y NUNCA debe cambiar después: si cambiara,
--- los tickets ya impresos dejarían de poder escanearse correctamente.
+-- Clave del cifrado Feistel (ver src/logic/folioCifrado.ts) — usada SOLO
+-- para generar códigos de facturación opacos (código de pago de
+-- pensionado, código de facturación de boleto; ver formatearCodigoPago y
+-- formatearCodigoFacturacionBoleto en src/logic/folioBarcode.ts). El folio
+-- impreso/escaneado del boleto ya NO pasa por aquí — el SAT exige que sea
+-- el número secuencial real, sin cifrar. Se genera sola la primera vez que
+-- hace falta y NUNCA debe cambiar después: si cambiara, los códigos de
+-- facturación ya entregados dejarían de coincidir.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS clave_cifrado_folio (
   id                  INTEGER PRIMARY KEY AUTOINCREMENT,

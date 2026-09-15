@@ -1,5 +1,5 @@
 import iconv from 'iconv-lite'
-import { formatearFolio } from '../logic/folioBarcode'
+import { formatearFolioImpreso, formatearFolioPlano } from '../logic/folioBarcode'
 import { urlFacturacion } from '../logic/urlFacturacion'
 import { ESQUEMA_COCHE_ALTO, ESQUEMA_COCHE_ANCHO, ESQUEMA_COCHE_DATOS_BASE64 } from './escposEsquemaCoche'
 
@@ -81,7 +81,7 @@ function linea(): Buffer {
 function barcode(valor: string): Buffer {
   // CODE128 en ESC/POS necesita un prefijo de "code set" — {B es el set
   // alfanumérico (letras+dígitos+símbolos), el que le sirve al patrón de
-  // folio actual (ver formatearFolio en src/logic/folioBarcode.ts).
+  // folio actual (ver formatearFolioImpreso en src/logic/folioBarcode.ts).
   const datos = Buffer.concat([Buffer.from('{B', 'ascii'), Buffer.from(valor, 'ascii')])
   return Buffer.concat([
     alinear('centro'),
@@ -168,6 +168,7 @@ export interface DatosBoletoImprimibleEscpos {
   estacionamientoNombre: string
   textoBoleto: string | null
   textoLegalBoleto: string | null
+  marcador: string | null
   serie: string
   folio: number
   tipoVehiculo: string
@@ -176,8 +177,8 @@ export interface DatosBoletoImprimibleEscpos {
   tarifaPlana?: { nombre: string; precioFijo: number; horasIncluidas: number } | null
 }
 
-export function construirTicketEntrada(datos: DatosBoletoImprimibleEscpos, claveFolio: string): Buffer {
-  const textoFolio = formatearFolio(datos.serie, datos.folio, claveFolio)
+export function construirTicketEntrada(datos: DatosBoletoImprimibleEscpos): Buffer {
+  const textoFolio = formatearFolioImpreso(datos.marcador, datos.serie, datos.folio)
   const partes: Buffer[] = [iniciar(), texto(datos.estacionamientoNombre, { centrado: true, negrita: true })]
 
   if (datos.textoBoleto) {
@@ -216,6 +217,7 @@ export interface DatosReciboCobroEscpos {
   estacionamientoNombre: string
   textoBoleto: string | null
   textoLegalBoleto: string | null
+  marcador: string | null
   serie: string
   folio: number
   tipoCobro: 'regular' | 'plana'
@@ -224,14 +226,17 @@ export interface DatosReciboCobroEscpos {
   excedenteMinutos?: number
   excedenteMonto?: number
   recargoBoletoPerdido?: number
-  // Slug de "Monitoreo en la nube" (null si facturación no está
-  // habilitada o no hay proyecto Firebase configurado) — con esto se
-  // imprime un QR al portal de autofacturación, ver urlFacturacion().
+  // Código de facturación propio del boleto (ver formatearCodigoFacturacionBoleto
+  // en src/logic/folioBarcode.ts) — desligado del folio, null si facturación
+  // no está habilitada o no hay proyecto Firebase configurado.
+  codigoFactura?: string | null
+  // Slug de "Monitoreo en la nube" — con esto se arma la URL del QR al
+  // portal de autofacturación, ver urlFacturacion().
   slugFacturacion?: string | null
 }
 
-export function construirTicketCobro(datos: DatosReciboCobroEscpos, claveFolio: string): Buffer {
-  const textoFolio = formatearFolio(datos.serie, datos.folio, claveFolio)
+export function construirTicketCobro(datos: DatosReciboCobroEscpos): Buffer {
+  const textoFolio = formatearFolioImpreso(datos.marcador, datos.serie, datos.folio)
   const recargoBoletoPerdido = datos.recargoBoletoPerdido ?? 0
   const montoSinRecargo = datos.monto - recargoBoletoPerdido
   const montoFijo = datos.tipoCobro === 'plana' ? montoSinRecargo - (datos.excedenteMonto ?? 0) : null
@@ -261,9 +266,12 @@ export function construirTicketCobro(datos: DatosReciboCobroEscpos, claveFolio: 
     partes.push(texto(`Recargo boleto perdido: $${recargoBoletoPerdido.toFixed(2)}`))
   }
   partes.push(barcode(textoFolio))
-  if (datos.slugFacturacion) {
-    partes.push(qrCode(urlFacturacion(datos.slugFacturacion, textoFolio)))
-    partes.push(texto('Escanea para facturar', { centrado: true }))
+  if (datos.codigoFactura) {
+    partes.push(texto(`Código de factura: ${datos.codigoFactura}`))
+    if (datos.slugFacturacion) {
+      partes.push(qrCode(urlFacturacion(datos.slugFacturacion, datos.codigoFactura)))
+      partes.push(texto('Escanea para facturar', { centrado: true }))
+    }
   }
   partes.push(linea())
   partes.push(texto(`Total: $${datos.monto.toFixed(2)}`, { negrita: true }))
@@ -455,7 +463,7 @@ const FORMATO_FECHA_CORTA: Intl.DateTimeFormatOptions = {
  * esa serie en particular), en dos líneas por boleto para cubrir bien el
  * folio, vehículo, horarios y monto sin depender de columnas exactas.
  */
-export function construirReporteCorteSerie(datos: DatosReporteCorteSerieEscpos, claveFolio: string): Buffer {
+export function construirReporteCorteSerie(datos: DatosReporteCorteSerieEscpos): Buffer {
   const partes: Buffer[] = [iniciar(), texto(datos.estacionamientoNombre, { centrado: true, negrita: true })]
 
   partes.push(texto(`Corte de caja - serie ${datos.serie}`, { centrado: true }))
@@ -466,7 +474,7 @@ export function construirReporteCorteSerie(datos: DatosReporteCorteSerieEscpos, 
   partes.push(linea())
 
   for (const b of datos.boletos) {
-    const folioTexto = formatearFolio(b.serie, b.folio, claveFolio)
+    const folioTexto = formatearFolioPlano(b.serie, b.folio)
     const entrada = new Date(b.horaEntrada).toLocaleString('es-MX', FORMATO_FECHA_CORTA)
     const salida = new Date(b.horaSalida).toLocaleString('es-MX', FORMATO_FECHA_CORTA)
     partes.push(texto(`${folioTexto}  ${b.tipoVehiculo}  $${b.monto.toFixed(2)}`))

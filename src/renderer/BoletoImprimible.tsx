@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import JsBarcode from 'jsbarcode'
-import { formatearFolio } from '../logic/folioBarcode'
+import { formatearFolioImpreso } from '../logic/folioBarcode'
 import { binarizarImagen } from './binarizarImagen'
 import esquemaCoche from './assets/esquema-coche.jpg?inline'
 
@@ -9,6 +9,7 @@ export interface DatosBoletoImprimible {
   estacionamientoNombre: string
   textoBoleto: string | null
   textoLegalBoleto: string | null
+  marcador: string | null
   serie: string
   folio: number
   tipoVehiculo: string
@@ -23,15 +24,9 @@ export interface DatosBoletoImprimible {
  * src/main/print.ts), tomando el outerHTML de este elemento (id
  * "boleto-imprimible") ya renderizado.
  */
-export function BoletoImprimible({
-  datos,
-  claveFolio
-}: {
-  datos: DatosBoletoImprimible
-  claveFolio: string
-}): ReactElement {
+export function BoletoImprimible({ datos }: { datos: DatosBoletoImprimible }): ReactElement {
   const svgRef = useRef<SVGSVGElement>(null)
-  const textoFolio = formatearFolio(datos.serie, datos.folio, claveFolio)
+  const textoFolio = formatearFolioImpreso(datos.marcador, datos.serie, datos.folio)
   const [errorBarcode, setErrorBarcode] = useState<string | null>(null)
   const [esquemaBN, setEsquemaBN] = useState<string | null>(null)
 

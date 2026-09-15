@@ -135,7 +135,7 @@ describe('aplicarConfigSincronizable', () => {
       umbralRecobroSospechoso: 2,
       tiposVehiculo: [{ id: 999999, nombre: 'Fantasma', activo: true, tarifaMaximaDiaria: 10, preciosPorBloque: [] }],
       tarifasPlanas: [{ id: 999999, tipoVehiculoId: tipoAutoId, nombre: 'Fantasma', precioFijo: 1, horasIncluidas: 1, activo: true }],
-      series: [{ id: 999999, serie: 'Z', proporcion: 1, activo: true, siguienteNumero: 1 }],
+      series: [{ id: 999999, serie: 'Z', marcador: '~', proporcion: 1, activo: true, siguienteNumero: 1 }],
       usuarios: [
         { id: 999999, nombreUsuario: 'fantasma', nombreCompleto: 'Fantasma', rol: 'empleado', activo: true, passwordNueva: null }
       ]
@@ -262,7 +262,7 @@ describe('aplicarConfigSincronizable', () => {
 
   it('crea una serie nueva y elimina una existente', () => {
     const config = construirConfigSincronizable(db, estacionamientoId)
-    config.series.push({ id: null, serie: 'C', proporcion: 2, activo: true, siguienteNumero: 1 })
+    config.series.push({ id: null, serie: 'C', marcador: '+', proporcion: 2, activo: true, siguienteNumero: 1 })
     const serieB = config.series.find((s) => s.serie === 'B')!
     serieB.eliminar = true
 
@@ -276,8 +276,8 @@ describe('aplicarConfigSincronizable', () => {
 
   it('una serie con formato inválido en el lote no bloquea que se cree la otra que sí es válida', () => {
     const config = construirConfigSincronizable(db, estacionamientoId)
-    config.series.push({ id: null, serie: 'CC-1', proporcion: 1, activo: true, siguienteNumero: 1 })
-    config.series.push({ id: null, serie: 'D', proporcion: 1, activo: true, siguienteNumero: 1 })
+    config.series.push({ id: null, serie: 'CC-1', marcador: '+', proporcion: 1, activo: true, siguienteNumero: 1 })
+    config.series.push({ id: null, serie: 'D', marcador: '=', proporcion: 1, activo: true, siguienteNumero: 1 })
 
     const { errores } = aplicarConfigSincronizable(db, estacionamientoId, config)
 

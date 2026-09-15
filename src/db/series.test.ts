@@ -3,10 +3,12 @@ import { abrirDb, DB } from './index'
 import {
   actualizarSerie,
   asignarSiguienteFolio,
+  buscarSeriePorMarcador,
   crearSerie,
   eliminarSerie,
   establecerSiguienteNumero,
-  listarSeries
+  listarSeries,
+  obtenerMarcadorDeSerie
 } from './series'
 
 let db: DB
@@ -18,14 +20,16 @@ beforeEach(() => {
     .prepare('INSERT INTO estacionamientos (nombre) VALUES (?)')
     .run('Estacionamiento de prueba').lastInsertRowid as number
 
-  db.prepare('INSERT INTO series_folio (estacionamiento_id, serie, proporcion) VALUES (?,?,?)').run(
+  db.prepare('INSERT INTO series_folio (estacionamiento_id, serie, marcador, proporcion) VALUES (?,?,?,?)').run(
     estacionamientoId,
     'A',
+    '*',
     3
   )
-  db.prepare('INSERT INTO series_folio (estacionamiento_id, serie, proporcion) VALUES (?,?,?)').run(
+  db.prepare('INSERT INTO series_folio (estacionamiento_id, serie, marcador, proporcion) VALUES (?,?,?,?)').run(
     estacionamientoId,
     'B',
+    '#',
     1
   )
 })
@@ -58,9 +62,10 @@ describe('asignarSiguienteFolio', () => {
     const otroEstId = db
       .prepare('INSERT INTO estacionamientos (nombre) VALUES (?)')
       .run('Otro estacionamiento').lastInsertRowid as number
-    db.prepare('INSERT INTO series_folio (estacionamiento_id, serie, proporcion) VALUES (?,?,?)').run(
+    db.prepare('INSERT INTO series_folio (estacionamiento_id, serie, marcador, proporcion) VALUES (?,?,?,?)').run(
       otroEstId,
       'A',
+      '*',
       1
     )
 
@@ -84,17 +89,17 @@ describe('asignarSiguienteFolio', () => {
 })
 
 describe('listarSeries / actualizarSerie / crearSerie (admin)', () => {
-  it('listarSeries incluye ambas series con su proporción', () => {
+  it('listarSeries incluye ambas series con su proporción y marcador', () => {
     const series = listarSeries(db, estacionamientoId)
-    expect(series.map((s) => ({ serie: s.serie, proporcion: s.proporcion }))).toEqual([
-      { serie: 'A', proporcion: 3 },
-      { serie: 'B', proporcion: 1 }
+    expect(series.map((s) => ({ serie: s.serie, marcador: s.marcador, proporcion: s.proporcion }))).toEqual([
+      { serie: 'A', marcador: '*', proporcion: 3 },
+      { serie: 'B', marcador: '#', proporcion: 1 }
     ])
   })
 
   it('actualizarSerie cambia la proporción y se refleja en el reparto', () => {
     const serieB = listarSeries(db, estacionamientoId).find((s) => s.serie === 'B')!
-    actualizarSerie(db, { id: serieB.id, proporcion: 3, activo: true }) // ahora 3:3 = 1:1
+    actualizarSerie(db, { id: serieB.id, marcador: serieB.marcador!, proporcion: 3, activo: true }) // ahora 3:3 = 1:1
 
     const asignados = Array.from({ length: 4 }, () => asignarSiguienteFolio(db, estacionamientoId))
     expect(asignados.filter((a) => a.serie === 'A')).toHaveLength(2)
@@ -103,28 +108,28 @@ describe('listarSeries / actualizarSerie / crearSerie (admin)', () => {
 
   it('desactivar una serie hace que ya no se le asignen folios', () => {
     const serieB = listarSeries(db, estacionamientoId).find((s) => s.serie === 'B')!
-    actualizarSerie(db, { id: serieB.id, proporcion: serieB.proporcion, activo: false })
+    actualizarSerie(db, { id: serieB.id, marcador: serieB.marcador!, proporcion: serieB.proporcion, activo: false })
 
     const asignados = Array.from({ length: 5 }, () => asignarSiguienteFolio(db, estacionamientoId))
     expect(asignados.every((a) => a.serie === 'A')).toBe(true)
   })
 
   it('crearSerie agrega una serie nueva utilizable de inmediato', () => {
-    crearSerie(db, { estacionamientoId, serie: 'c', proporcion: 1 })
+    crearSerie(db, { estacionamientoId, serie: 'c', marcador: '+', proporcion: 1 })
     expect(listarSeries(db, estacionamientoId).map((s) => s.serie)).toContain('C')
   })
 
   it('rechaza símbolos y otros caracteres que Code128 no puede imprimir (ej. "A°")', () => {
-    expect(() => crearSerie(db, { estacionamientoId, serie: 'A°', proporcion: 1 })).toThrow(
+    expect(() => crearSerie(db, { estacionamientoId, serie: 'A°', marcador: '+', proporcion: 1 })).toThrow(
       'La serie debe ser de 1 a 3 letras'
     )
   })
 
   it('rechaza números, espacios y series vacías', () => {
-    expect(() => crearSerie(db, { estacionamientoId, serie: 'A1', proporcion: 1 })).toThrow()
-    expect(() => crearSerie(db, { estacionamientoId, serie: 'A B', proporcion: 1 })).toThrow()
-    expect(() => crearSerie(db, { estacionamientoId, serie: '', proporcion: 1 })).toThrow()
-    expect(() => crearSerie(db, { estacionamientoId, serie: 'ABCD', proporcion: 1 })).toThrow()
+    expect(() => crearSerie(db, { estacionamientoId, serie: 'A1', marcador: '+', proporcion: 1 })).toThrow()
+    expect(() => crearSerie(db, { estacionamientoId, serie: 'A B', marcador: '+', proporcion: 1 })).toThrow()
+    expect(() => crearSerie(db, { estacionamientoId, serie: '', marcador: '+', proporcion: 1 })).toThrow()
+    expect(() => crearSerie(db, { estacionamientoId, serie: 'ABCD', marcador: '+', proporcion: 1 })).toThrow()
   })
 
   it('eliminarSerie la quita del listado y del reparto', () => {
@@ -192,7 +197,7 @@ describe('listarSeries / actualizarSerie / crearSerie (admin)', () => {
     const serieA = listarSeries(db, estacionamientoId).find((s) => s.serie === 'A')!
     eliminarSerie(db, serieA.id)
 
-    const recreada = crearSerie(db, { estacionamientoId, serie: 'A', proporcion: 1 })
+    const recreada = crearSerie(db, { estacionamientoId, serie: 'A', marcador: '*', proporcion: 1 })
     expect(recreada.siguienteNumero).toBe(41)
 
     // Y de verdad se puede asignar sin chocar contra el UNIQUE de boletos.
@@ -205,7 +210,7 @@ describe('listarSeries / actualizarSerie / crearSerie (admin)', () => {
       const serieA = listarSeries(db, estacionamientoId).find((s) => s.serie === 'A')!
       const serieB = listarSeries(db, estacionamientoId).find((s) => s.serie === 'B')!
       establecerSiguienteNumero(db, serieA.id, 1500)
-      actualizarSerie(db, { id: serieB.id, proporcion: serieB.proporcion, activo: false })
+      actualizarSerie(db, { id: serieB.id, marcador: serieB.marcador!, proporcion: serieB.proporcion, activo: false })
 
       expect(listarSeries(db, estacionamientoId).find((s) => s.serie === 'A')!.siguienteNumero).toBe(1500)
       expect(asignarSiguienteFolio(db, estacionamientoId)).toEqual({ serie: 'A', folio: 1500 })
@@ -242,5 +247,55 @@ describe('listarSeries / actualizarSerie / crearSerie (admin)', () => {
     it('lanza error si la serie no existe', () => {
       expect(() => establecerSiguienteNumero(db, 999999, 10)).toThrow('No existe esa serie')
     })
+  })
+})
+
+describe('marcador (símbolo del folio impreso)', () => {
+  it('crearSerie rechaza un marcador fuera del pool curado', () => {
+    expect(() => crearSerie(db, { estacionamientoId, serie: 'C', marcador: '°', proporcion: 1 })).toThrow(
+      'El marcador debe ser uno de:'
+    )
+  })
+
+  it('crearSerie rechaza un marcador ya usado por otra serie del mismo estacionamiento', () => {
+    expect(() => crearSerie(db, { estacionamientoId, serie: 'C', marcador: '*', proporcion: 1 })).toThrow(
+      'ya lo usa otra serie'
+    )
+  })
+
+  it('crearSerie acepta el mismo marcador si es de OTRO estacionamiento', () => {
+    const otroEstId = db
+      .prepare('INSERT INTO estacionamientos (nombre) VALUES (?)')
+      .run('Otro estacionamiento').lastInsertRowid as number
+    expect(() => crearSerie(db, { estacionamientoId: otroEstId, serie: 'A', marcador: '*', proporcion: 1 })).not.toThrow()
+  })
+
+  it('actualizarSerie rechaza cambiar a un marcador que ya usa otra serie', () => {
+    const serieB = listarSeries(db, estacionamientoId).find((s) => s.serie === 'B')!
+    expect(() =>
+      actualizarSerie(db, { id: serieB.id, marcador: '*', proporcion: serieB.proporcion, activo: serieB.activo })
+    ).toThrow('ya lo usa otra serie')
+  })
+
+  it('actualizarSerie permite conservar el marcador propio de la serie sin chocar consigo misma', () => {
+    const serieA = listarSeries(db, estacionamientoId).find((s) => s.serie === 'A')!
+    expect(() =>
+      actualizarSerie(db, { id: serieA.id, marcador: '*', proporcion: serieA.proporcion, activo: serieA.activo })
+    ).not.toThrow()
+  })
+
+  it('obtenerMarcadorDeSerie/buscarSeriePorMarcador son inversos entre sí', () => {
+    expect(obtenerMarcadorDeSerie(db, estacionamientoId, 'A')).toBe('*')
+    expect(buscarSeriePorMarcador(db, estacionamientoId, '*')).toBe('A')
+    expect(obtenerMarcadorDeSerie(db, estacionamientoId, 'ZZZ')).toBeNull()
+    expect(buscarSeriePorMarcador(db, estacionamientoId, '~')).toBeNull()
+  })
+
+  it('obtenerMarcadorDeSerie/buscarSeriePorMarcador ignoran "activo" — una serie desactivada sigue resolviéndose', () => {
+    const serieB = listarSeries(db, estacionamientoId).find((s) => s.serie === 'B')!
+    actualizarSerie(db, { id: serieB.id, marcador: serieB.marcador!, proporcion: serieB.proporcion, activo: false })
+
+    expect(obtenerMarcadorDeSerie(db, estacionamientoId, 'B')).toBe('#')
+    expect(buscarSeriePorMarcador(db, estacionamientoId, '#')).toBe('B')
   })
 })

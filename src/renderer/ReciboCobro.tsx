@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { formatearFolio } from '../logic/folioBarcode'
+import { formatearFolioImpreso } from '../logic/folioBarcode'
 import { urlFacturacion } from '../logic/urlFacturacion'
 import { CodigoQR } from './CodigoQR'
 
@@ -7,6 +7,7 @@ export interface DatosReciboCobro {
   estacionamientoNombre: string
   textoBoleto: string | null
   textoLegalBoleto: string | null
+  marcador: string | null
   serie: string
   folio: number
   tipoCobro: 'regular' | 'plana'
@@ -25,16 +26,17 @@ export interface DatosReciboCobro {
  */
 export function ReciboCobro({
   datos,
-  claveFolio,
+  codigoFactura,
   slugFacturacion
 }: {
   datos: DatosReciboCobro
-  claveFolio: string
-  // null si facturación no está habilitada o no hay proyecto Firebase
-  // configurado — en ese caso no tiene caso imprimir un QR que no sirve.
+  // Código de facturación propio del boleto (ver formatearCodigoFacturacionBoleto
+  // en src/logic/folioBarcode.ts) — desligado del folio, null si facturación no
+  // está habilitada o no hay proyecto Firebase configurado.
+  codigoFactura: string | null
   slugFacturacion: string | null
 }): ReactElement {
-  const textoFolio = formatearFolio(datos.serie, datos.folio, claveFolio)
+  const textoFolio = formatearFolioImpreso(datos.marcador, datos.serie, datos.folio)
   const recargoBoletoPerdido = datos.recargoBoletoPerdido ?? 0
   // El desglose por tiempo/tarifa plana es siempre sobre el cálculo normal —
   // el recargo por boleto perdido se muestra aparte, no mezclado ahí.
@@ -68,10 +70,15 @@ export function ReciboCobro({
       {recargoBoletoPerdido ? <div>Recargo boleto perdido: ${recargoBoletoPerdido.toFixed(2)}</div> : null}
       <hr />
       <div style={{ fontWeight: 'bold', textAlign: 'right' }}>Total: ${datos.monto.toFixed(2)}</div>
-      {slugFacturacion && (
+      {codigoFactura && (
         <div style={{ marginTop: '0.5rem' }}>
-          <CodigoQR texto={urlFacturacion(slugFacturacion, textoFolio)} />
-          <div style={{ textAlign: 'center', fontSize: 10 }}>Escanea para facturar</div>
+          <div>Código de factura: {codigoFactura}</div>
+          {slugFacturacion && (
+            <>
+              <CodigoQR texto={urlFacturacion(slugFacturacion, codigoFactura)} />
+              <div style={{ textAlign: 'center', fontSize: 10 }}>Escanea para facturar</div>
+            </>
+          )}
         </div>
       )}
       {datos.textoLegalBoleto && (

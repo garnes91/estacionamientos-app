@@ -102,9 +102,10 @@ async function localizarYMarcarFacturado(slug: string, codigo: string): Promise<
         throw new HttpsError('already-exists', 'Este boleto ya fue facturado')
       }
       tx.update(boletoRef, { facturado: true, facturaEstado: 'en_proceso' })
-      // El código que ve el cliente es el CIFRADO (el mismo que trae
-      // impreso el boleto) — nunca el folio secuencial interno, que
-      // revelaría el volumen real de boletos.
+      // El código que ve el cliente es un código de facturación cifrado,
+      // independiente del folio impreso en el ticket (ver
+      // formatearCodigoFacturacionBoleto en el repo de la app) — nunca el
+      // folio secuencial real, que ahora es plano por requisito del SAT.
       return { monto: datos.monto as number, descripcion: `ticket ${codigo}`, ref: boletoRef }
     }
 

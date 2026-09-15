@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import iconv from 'iconv-lite'
-import { formatearFolio } from '../logic/folioBarcode'
+import { formatearFolioImpreso, formatearFolioPlano } from '../logic/folioBarcode'
 import { urlFacturacion } from '../logic/urlFacturacion'
 import {
   construirReporteCorte,
@@ -12,13 +12,12 @@ import {
 } from './escpos'
 import { ESQUEMA_COCHE_ALTO, ESQUEMA_COCHE_ANCHO } from './escposEsquemaCoche'
 
-const CLAVE_FOLIO = 'clave-de-prueba'
-
 describe('construirTicketEntrada', () => {
   const datosBase = {
     estacionamientoNombre: 'Estación Central',
     textoBoleto: null,
     textoLegalBoleto: null,
+    marcador: '*',
     serie: 'A',
     folio: 176,
     tipoVehiculo: 'Auto',
@@ -28,20 +27,20 @@ describe('construirTicketEntrada', () => {
   }
 
   it('empieza con el comando de inicio (ESC @), selección de código de página y una línea en blanco de sacrificio', () => {
-    const buffer = construirTicketEntrada(datosBase, CLAVE_FOLIO)
+    const buffer = construirTicketEntrada(datosBase)
     // ESC @, ESC t 2 (tabla CP850), 0x0A (línea en blanco para el buffer de la térmica).
     expect(buffer.subarray(0, 6)).toEqual(Buffer.from([0x1b, 0x40, 0x1b, 0x74, 2, 0x0a]))
   })
 
   it('el nombre del estacionamiento va centrado y en negritas', () => {
-    const buffer = construirTicketEntrada(datosBase, CLAVE_FOLIO)
+    const buffer = construirTicketEntrada(datosBase)
     // ESC a 1 (centrado) seguido de ESC E 1 (negritas) antes del texto codificado.
     const centradoYNegritas = Buffer.from([0x1b, 0x61, 1, 0x1b, 0x45, 1])
     expect(buffer.indexOf(centradoYNegritas)).toBe(6)
   })
 
   it('codifica acentos/ñ en CP850, no en UTF-8 crudo', () => {
-    const buffer = construirTicketEntrada({ ...datosBase, estacionamientoNombre: 'Peñón' }, CLAVE_FOLIO)
+    const buffer = construirTicketEntrada({ ...datosBase, estacionamientoNombre: 'Peñón' })
     const enCp850 = iconv.encode('Peñón', 'cp850')
     const enUtf8 = Buffer.from('Peñón', 'utf8')
     expect(buffer.indexOf(enCp850)).toBeGreaterThanOrEqual(0)
@@ -49,9 +48,10 @@ describe('construirTicketEntrada', () => {
     expect(enCp850.equals(enUtf8)).toBe(false)
   })
 
-  it('incluye el folio (ya formateado/cifrado) en texto y en el comando de barcode', () => {
-    const buffer = construirTicketEntrada(datosBase, CLAVE_FOLIO)
-    const textoFolio = formatearFolio(datosBase.serie, datosBase.folio, CLAVE_FOLIO)
+  it('incluye el folio REAL (marcador + folio real, sin cifrar) en texto y en el comando de barcode', () => {
+    const buffer = construirTicketEntrada(datosBase)
+    const textoFolio = formatearFolioImpreso(datosBase.marcador, datosBase.serie, datosBase.folio)
+    expect(textoFolio).toBe('*000176')
 
     expect(buffer.indexOf(Buffer.from(`Folio: ${textoFolio}`, 'ascii'))).toBeGreaterThanOrEqual(0)
 
@@ -61,8 +61,13 @@ describe('construirTicketEntrada', () => {
     expect(buffer.indexOf(comandoBarcode)).toBeGreaterThanOrEqual(0)
   })
 
+  it('sin marcador (serie borrada con el boleto todavía abierto), cae al formato con la letra visible', () => {
+    const buffer = construirTicketEntrada({ ...datosBase, marcador: null })
+    expect(buffer.indexOf(Buffer.from('Folio: A-000176', 'ascii'))).toBeGreaterThanOrEqual(0)
+  })
+
   it('incluye Vehículo/Placa/Entrada y termina con el comando de corte (GS V 0)', () => {
-    const buffer = construirTicketEntrada({ ...datosBase, placa: 'ABC-123' }, CLAVE_FOLIO)
+    const buffer = construirTicketEntrada({ ...datosBase, placa: 'ABC-123' })
     expect(buffer.indexOf(Buffer.from('Vehículo: Auto', 'utf8'))).toBe(-1) // no debe ir en UTF-8 crudo
     expect(buffer.indexOf(iconv.encode('Vehículo: Auto', 'cp850'))).toBeGreaterThanOrEqual(0)
     expect(buffer.indexOf(iconv.encode('Placa: ABC-123', 'cp850'))).toBeGreaterThanOrEqual(0)
@@ -73,12 +78,12 @@ describe('construirTicketEntrada', () => {
   })
 
   it('sin placa, no imprime la línea de placa', () => {
-    const buffer = construirTicketEntrada(datosBase, CLAVE_FOLIO)
+    const buffer = construirTicketEntrada(datosBase)
     expect(buffer.indexOf(iconv.encode('Placa:', 'cp850'))).toBe(-1)
   })
 
   it('incluye el esquema del coche como imagen rasterizada (GS v 0) antes del corte', () => {
-    const buffer = construirTicketEntrada(datosBase, CLAVE_FOLIO)
+    const buffer = construirTicketEntrada(datosBase)
     const anchoBytes = Math.ceil(ESQUEMA_COCHE_ANCHO / 8)
     // GS v 0 m xL xH yL yH — xL/xH es el ancho EN BYTES, yL/yH el alto en puntos.
     const encabezadoImagen = Buffer.from([
@@ -100,15 +105,15 @@ describe('construirTicketEntrada', () => {
   })
 
   it('sin textoLegalBoleto, no imprime nada extra después del esquema', () => {
-    const buffer = construirTicketEntrada(datosBase, CLAVE_FOLIO)
+    const buffer = construirTicketEntrada(datosBase)
     expect(buffer.indexOf(iconv.encode('Responsabilidad', 'cp850'))).toBe(-1)
   })
 
   it('con textoLegalBoleto, lo imprime AL FINAL (después del esquema, antes del corte), línea por línea', () => {
-    const buffer = construirTicketEntrada(
-      { ...datosBase, textoLegalBoleto: 'Línea 1 de responsabilidad\nLínea 2 de cobertura' },
-      CLAVE_FOLIO
-    )
+    const buffer = construirTicketEntrada({
+      ...datosBase,
+      textoLegalBoleto: 'Línea 1 de responsabilidad\nLínea 2 de cobertura'
+    })
     const posEsquema = buffer.indexOf(iconv.encode('Marcar daños visibles al ingresar:', 'cp850'))
     const posLinea1 = buffer.indexOf(iconv.encode('Línea 1 de responsabilidad', 'cp850'))
     const posLinea2 = buffer.indexOf(iconv.encode('Línea 2 de cobertura', 'cp850'))
@@ -127,6 +132,7 @@ describe('construirTicketCobro', () => {
     estacionamientoNombre: 'Estación Central',
     textoBoleto: null,
     textoLegalBoleto: null,
+    marcador: '*',
     serie: 'A',
     folio: 176,
     tipoCobro: 'regular' as const,
@@ -135,13 +141,18 @@ describe('construirTicketCobro', () => {
   }
 
   it('cobro regular: muestra el tiempo y el monto sin recargo aparte', () => {
-    const buffer = construirTicketCobro(datosBase, CLAVE_FOLIO)
+    const buffer = construirTicketCobro(datosBase)
     expect(buffer.indexOf(iconv.encode('Tiempo: 60 min - $40.00', 'cp850'))).toBeGreaterThanOrEqual(0)
     expect(buffer.indexOf(iconv.encode('Total: $40.00', 'cp850'))).toBeGreaterThanOrEqual(0)
   })
 
+  it('el folio impreso es el real (marcador + folio, sin cifrar)', () => {
+    const buffer = construirTicketCobro(datosBase)
+    expect(buffer.indexOf(Buffer.from('Folio: *000176', 'ascii'))).toBeGreaterThanOrEqual(0)
+  })
+
   it('con recargo de boleto perdido: lo desglosa aparte del cálculo normal', () => {
-    const buffer = construirTicketCobro({ ...datosBase, monto: 90, recargoBoletoPerdido: 50 }, CLAVE_FOLIO)
+    const buffer = construirTicketCobro({ ...datosBase, monto: 90, recargoBoletoPerdido: 50 })
     // El desglose de tiempo es sobre el monto SIN el recargo (90 - 50 = 40).
     expect(buffer.indexOf(iconv.encode('Tiempo: 60 min - $40.00', 'cp850'))).toBeGreaterThanOrEqual(0)
     expect(buffer.indexOf(iconv.encode('Recargo boleto perdido: $50.00', 'cp850'))).toBeGreaterThanOrEqual(0)
@@ -149,33 +160,33 @@ describe('construirTicketCobro', () => {
   })
 
   it('tarifa plana: desglosa el fijo y el excedente', () => {
-    const buffer = construirTicketCobro(
-      { ...datosBase, tipoCobro: 'plana', monto: 120, excedenteMinutos: 60, excedenteMonto: 40 },
-      CLAVE_FOLIO
-    )
+    const buffer = construirTicketCobro({ ...datosBase, tipoCobro: 'plana', monto: 120, excedenteMinutos: 60, excedenteMonto: 40 })
     expect(buffer.indexOf(iconv.encode('Tarifa plana: $80.00', 'cp850'))).toBeGreaterThanOrEqual(0)
     expect(buffer.indexOf(iconv.encode('Excedente: 60 min - $40.00', 'cp850'))).toBeGreaterThanOrEqual(0)
   })
 
   it('no usa el guion largo "—" (CP850 no lo tiene, sale como "?" en la impresora)', () => {
-    const buffer = construirTicketCobro(
-      { ...datosBase, tipoCobro: 'plana', monto: 120, excedenteMinutos: 60, excedenteMonto: 40 },
-      CLAVE_FOLIO
-    )
+    const buffer = construirTicketCobro({ ...datosBase, tipoCobro: 'plana', monto: 120, excedenteMinutos: 60, excedenteMonto: 40 })
     // 0x3F es el caracter de reemplazo ('?') que usa iconv-lite cuando el
     // texto original tiene algo que la tabla CP850 no puede representar.
     expect(buffer.includes(Buffer.from([0x3f]))).toBe(false)
   })
 
-  it('sin slugFacturacion, no imprime QR ni la leyenda de facturar', () => {
-    const buffer = construirTicketCobro(datosBase, CLAVE_FOLIO)
+  it('sin codigoFactura, no imprime el código ni el QR (aunque venga slugFacturacion)', () => {
+    const buffer = construirTicketCobro({ ...datosBase, slugFacturacion: 'centro' })
+    expect(buffer.indexOf(iconv.encode('Código de factura', 'cp850'))).toBe(-1)
     expect(buffer.indexOf(iconv.encode('Escanea para facturar', 'cp850'))).toBe(-1)
   })
 
-  it('con slugFacturacion, imprime el QR (GS ( k, guarda datos con la URL) y la leyenda', () => {
-    const buffer = construirTicketCobro({ ...datosBase, slugFacturacion: 'centro' }, CLAVE_FOLIO)
-    const textoFolio = formatearFolio(datosBase.serie, datosBase.folio, CLAVE_FOLIO)
-    const url = urlFacturacion('centro', textoFolio)
+  it('con codigoFactura pero sin slugFacturacion, imprime el código pero no el QR', () => {
+    const buffer = construirTicketCobro({ ...datosBase, codigoFactura: 'BOL-042817' })
+    expect(buffer.indexOf(iconv.encode('Código de factura: BOL-042817', 'cp850'))).toBeGreaterThanOrEqual(0)
+    expect(buffer.indexOf(iconv.encode('Escanea para facturar', 'cp850'))).toBe(-1)
+  })
+
+  it('con codigoFactura y slugFacturacion, imprime el código, el QR (GS ( k, con la URL del código) y la leyenda', () => {
+    const buffer = construirTicketCobro({ ...datosBase, codigoFactura: 'BOL-042817', slugFacturacion: 'centro' })
+    const url = urlFacturacion('centro', 'BOL-042817')
 
     // GS ( k pL pH 31 50 30 <url> — fn 80, guarda los datos del símbolo.
     const bytesUrl = Buffer.from(url, 'utf8')
@@ -184,12 +195,13 @@ describe('construirTicketCobro', () => {
       Buffer.from([0x1d, 0x28, 0x6b, cuerpo.length & 0xff, (cuerpo.length >> 8) & 0xff]),
       cuerpo
     ])
+    expect(buffer.indexOf(iconv.encode('Código de factura: BOL-042817', 'cp850'))).toBeGreaterThanOrEqual(0)
     expect(buffer.indexOf(comandoGuardarDatos)).toBeGreaterThanOrEqual(0)
     expect(buffer.indexOf(iconv.encode('Escanea para facturar', 'cp850'))).toBeGreaterThanOrEqual(0)
   })
 
   it('con textoLegalBoleto, lo imprime AL FINAL (después del total), antes del corte', () => {
-    const buffer = construirTicketCobro({ ...datosBase, textoLegalBoleto: 'Aviso legal del recibo' }, CLAVE_FOLIO)
+    const buffer = construirTicketCobro({ ...datosBase, textoLegalBoleto: 'Aviso legal del recibo' })
     const posTotal = buffer.indexOf(iconv.encode('Total: $40.00', 'cp850'))
     const posLegal = buffer.indexOf(iconv.encode('Aviso legal del recibo', 'cp850'))
 
@@ -340,21 +352,22 @@ describe('construirReporteCorteSerie', () => {
     totalMonto: 40
   }
 
-  it('incluye el folio (formateado con formatearFolio) de cada boleto y el total de la serie', () => {
-    const buffer = construirReporteCorteSerie(datosBase, CLAVE_FOLIO)
-    const folioTexto = formatearFolio('A', 176, CLAVE_FOLIO)
+  it('incluye el folio de cada boleto en formato PLANO (letra real, sin marcador — es un reporte interno) y el total de la serie', () => {
+    const buffer = construirReporteCorteSerie(datosBase)
+    const folioTexto = formatearFolioPlano('A', 176)
+    expect(folioTexto).toBe('A-000176')
     expect(buffer.indexOf(iconv.encode(folioTexto, 'cp850'))).toBeGreaterThanOrEqual(0)
     expect(buffer.indexOf(iconv.encode('Total serie A: 1 boletos, $40.00', 'cp850'))).toBeGreaterThanOrEqual(0)
   })
 
   it('termina con el comando de corte', () => {
-    const buffer = construirReporteCorteSerie(datosBase, CLAVE_FOLIO)
+    const buffer = construirReporteCorteSerie(datosBase)
     const corte = Buffer.from([0x1d, 0x56, 66, 50])
     expect(buffer.subarray(buffer.length - 4)).toEqual(corte)
   })
 
   it('no usa el guion largo "—" en ningún texto', () => {
-    const buffer = construirReporteCorteSerie(datosBase, CLAVE_FOLIO)
+    const buffer = construirReporteCorteSerie(datosBase)
     expect(buffer.includes(Buffer.from([0x3f]))).toBe(false)
   })
 })

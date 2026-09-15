@@ -1,14 +1,17 @@
 import { app, ipcMain } from 'electron'
+import type { DB } from '../db'
 import { obtenerDb } from './db'
 import { establecerUsuarioActual, obtenerUsuarioActual, requerirUsuarioActual } from './auth'
 import { obtenerEstacionamientoActual } from '../db/estacionamientos'
 import { listarTiposVehiculo } from '../db/tiposVehiculo'
 import { autenticar } from '../db/usuarios'
 import { listarTarifasPlanas } from '../db/tarifasPlanas'
+import { obtenerMarcadorDeSerie } from '../db/series'
 import {
+  BoletoCerrado,
   cerrarBoleto,
   cerrarBoletoPerdido,
-  cobrarBoletoPorFolio,
+  cobrarBoletoPorTextoEscaneado,
   emitirBoleto,
   listarBoletosAbiertos,
   obtenerResumen,
@@ -21,7 +24,7 @@ import { alternarModoSoloSerieA, obtenerModoSoloSerieA } from '../db/modoSoloSer
 import { obtenerOCrearClaveFolio } from '../db/claveCifradoFolio'
 import { obtenerConfiguracionFacturacion } from '../db/configuracionFacturacion'
 import { obtenerConfiguracionMonitoreo } from '../db/configuracionMonitoreo'
-import { formatearCodigoPago } from '../logic/folioBarcode'
+import { formatearCodigoFacturacionBoleto, formatearCodigoPago } from '../logic/folioBarcode'
 import {
   crearPensionado,
   darDeBajaPensionado,
@@ -35,6 +38,29 @@ import { sincronizarBoletoCerrado } from './facturacionSync'
 import { sincronizarPagoPensionado } from './pensionadosFacturacionSync'
 import { sincronizarEstadisticas } from './estadisticasSync'
 import { avisarRecobroSospechoso } from './recobroSospechoso'
+
+/**
+ * Agrega el marcador de la serie (para reimprimir/mostrar el folio, ver
+ * formatearFolioImpreso) y, solo si facturación está habilitada y hay un
+ * proyecto Firebase configurado, un código de facturación propio del
+ * boleto — mismo patrón que ya usa pensionados:registrarPago más abajo.
+ */
+function enriquecerCierreParaFacturacion(
+  db: DB,
+  estacionamientoId: number,
+  cierre: BoletoCerrado
+): BoletoCerrado & { marcador: string | null; codigoFactura?: string } {
+  const marcador = obtenerMarcadorDeSerie(db, estacionamientoId, cierre.serie)
+
+  const facturacionHabilitada = obtenerConfiguracionFacturacion(db, estacionamientoId)?.habilitado
+  const firebaseConfigurado = obtenerConfiguracionMonitoreo(db, estacionamientoId) != null
+  if (!facturacionHabilitada || !firebaseConfigurado) {
+    return { ...cierre, marcador }
+  }
+
+  const claveFolio = obtenerOCrearClaveFolio(db, estacionamientoId)
+  return { ...cierre, marcador, codigoFactura: formatearCodigoFacturacionBoleto(cierre.id, claveFolio) }
+}
 
 /** Registra los canales IPC que el renderer usa vía window.api (ver preload.ts). */
 export function registrarIpc(): void {
@@ -52,7 +78,6 @@ export function registrarIpc(): void {
     const slugFacturacion = facturacionHabilitada && monitoreo ? monitoreo.slug : null
     return {
       ...estacionamiento,
-      claveFolio: obtenerOCrearClaveFolio(db, estacionamiento.id),
       slugFacturacion
     }
   })
@@ -112,13 +137,14 @@ export function registrarIpc(): void {
     ) => {
       const db = obtenerDb()
       const usuario = requerirUsuarioActual()
-      return emitirBoleto(db, {
+      const emitido = emitirBoleto(db, {
         estacionamientoId: params.estacionamientoId,
         tipoVehiculoId: params.tipoVehiculoId,
         placa: params.placa,
         tarifaPlanaId: params.tarifaPlanaId,
         usuarioEmisionId: usuario.id
       })
+      return { ...emitido, marcador: obtenerMarcadorDeSerie(db, params.estacionamientoId, emitido.serie) }
     }
   )
 
@@ -131,7 +157,7 @@ export function registrarIpc(): void {
     const usuario = requerirUsuarioActual()
     const cierre = cerrarBoleto(db, { boletoId: params.boletoId, usuarioCobroId: usuario.id })
     sincronizarBoletoCerrado(db, params.estacionamientoId, cierre)
-    return cierre
+    return enriquecerCierreParaFacturacion(db, params.estacionamientoId, cierre)
   })
 
   ipcMain.handle('boletos:cerrarPerdido', (_evento, params: { estacionamientoId: number; boletoId: number }) => {
@@ -139,35 +165,31 @@ export function registrarIpc(): void {
     const usuario = requerirUsuarioActual()
     const cierre = cerrarBoletoPerdido(db, { boletoId: params.boletoId, usuarioCobroId: usuario.id })
     sincronizarBoletoCerrado(db, params.estacionamientoId, cierre)
-    return cierre
+    return enriquecerCierreParaFacturacion(db, params.estacionamientoId, cierre)
   })
 
-  ipcMain.handle(
-    'boletos:cobrarPorFolio',
-    (_evento, params: { estacionamientoId: number; serie: string; folio: number }) => {
-      const db = obtenerDb()
-      const usuario = requerirUsuarioActual()
-      try {
-        const cierre = cobrarBoletoPorFolio(db, {
-          estacionamientoId: params.estacionamientoId,
-          serie: params.serie,
-          folio: params.folio,
-          usuarioCobroId: usuario.id
-        })
-        sincronizarBoletoCerrado(db, params.estacionamientoId, cierre)
-        return cierre
-      } catch (error) {
-        // No demora la respuesta al operador en caja ni tumba el flujo si
-        // falla el correo/Firestore — se avisa en segundo plano.
-        if (error instanceof RecobroSospechosoError) {
-          avisarRecobroSospechoso(db, params.estacionamientoId, error).catch((err) =>
-            console.error('[recobro] error al avisar:', err)
-          )
-        }
-        throw error
+  ipcMain.handle('boletos:cobrarEscaneado', (_evento, params: { estacionamientoId: number; texto: string }) => {
+    const db = obtenerDb()
+    const usuario = requerirUsuarioActual()
+    try {
+      const cierre = cobrarBoletoPorTextoEscaneado(db, {
+        estacionamientoId: params.estacionamientoId,
+        texto: params.texto,
+        usuarioCobroId: usuario.id
+      })
+      sincronizarBoletoCerrado(db, params.estacionamientoId, cierre)
+      return enriquecerCierreParaFacturacion(db, params.estacionamientoId, cierre)
+    } catch (error) {
+      // No demora la respuesta al operador en caja ni tumba el flujo si
+      // falla el correo/Firestore — se avisa en segundo plano.
+      if (error instanceof RecobroSospechosoError) {
+        avisarRecobroSospechoso(db, params.estacionamientoId, error).catch((err) =>
+          console.error('[recobro] error al avisar:', err)
+        )
       }
+      throw error
     }
-  )
+  })
 
   ipcMain.handle('boletos:resumen', (_evento, estacionamientoId: number) => {
     requerirUsuarioActual()

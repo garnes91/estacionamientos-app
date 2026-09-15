@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ReactElement } from 'react'
 import { BLOQUES_CONFIGURABLES } from '../logic/motorTarifas'
+import { MARCADORES_DISPONIBLES } from '../logic/folioBarcode'
 import type { UsuarioSesion } from './OperacionBoletos'
 
 const TABS = [
@@ -584,15 +585,24 @@ function TabTarifasPlanas({ estacionamientoId, avisar, avisarError }: TabProps):
 interface SerieFolioAdmin {
   id: number
   serie: string
+  marcador: string | null
   proporcion: number
   siguienteNumero: number
   contadorEmitidos: number
   activo: boolean
 }
 
+/** Marcadores que ninguna OTRA serie (id distinto de idPropio) ya está usando — para no ofrecer una opción que el servidor va a rechazar por duplicada. */
+function marcadoresLibres(series: SerieFolioAdmin[], idPropio: number | null): string[] {
+  const usados = new Set(
+    series.filter((s) => s.id !== idPropio).map((s) => s.marcador).filter((m): m is string => m != null)
+  )
+  return MARCADORES_DISPONIBLES.filter((m) => !usados.has(m))
+}
+
 function TabSeries({ estacionamientoId, avisar, avisarError, esAdmin }: TabProps & { esAdmin: boolean }): ReactElement {
   const [series, setSeries] = useState<SerieFolioAdmin[]>([])
-  const [nueva, setNueva] = useState({ serie: '', proporcion: 1 })
+  const [nueva, setNueva] = useState({ serie: '', marcador: '', proporcion: 1 })
   const [proximoFolio, setProximoFolio] = useState<Record<number, string>>({})
 
   async function cargar(): Promise<void> {
@@ -605,9 +615,23 @@ function TabSeries({ estacionamientoId, avisar, avisarError, esAdmin }: TabProps
     cargar().catch(avisarError)
   }, [estacionamientoId])
 
+  // Mantiene "nueva.marcador" en un valor válido (el primero libre) cada
+  // vez que cambia la lista de series — así el selector de "Agregar serie"
+  // nunca queda apuntando a un marcador que otra serie ya tomó.
+  useEffect(() => {
+    const libres = marcadoresLibres(series, null)
+    if (!libres.includes(nueva.marcador)) {
+      setNueva((prev) => ({ ...prev, marcador: libres[0] ?? '' }))
+    }
+  }, [series])
+
   async function guardar(s: SerieFolioAdmin): Promise<void> {
+    if (!s.marcador) {
+      avisarError(new Error('Elige un marcador para esta serie'))
+      return
+    }
     try {
-      await window.api.admin.series.actualizar({ id: s.id, proporcion: s.proporcion, activo: s.activo })
+      await window.api.admin.series.actualizar({ id: s.id, marcador: s.marcador, proporcion: s.proporcion, activo: s.activo })
       await cargar()
       avisar(`Serie "${s.serie}" guardada`)
     } catch (e) {
@@ -616,10 +640,15 @@ function TabSeries({ estacionamientoId, avisar, avisarError, esAdmin }: TabProps
   }
 
   async function crear(): Promise<void> {
-    if (!nueva.serie.trim()) return
+    if (!nueva.serie.trim() || !nueva.marcador) return
     try {
-      await window.api.admin.series.crear({ estacionamientoId, serie: nueva.serie.trim(), proporcion: nueva.proporcion })
-      setNueva({ serie: '', proporcion: 1 })
+      await window.api.admin.series.crear({
+        estacionamientoId,
+        serie: nueva.serie.trim(),
+        marcador: nueva.marcador,
+        proporcion: nueva.proporcion
+      })
+      setNueva({ serie: '', marcador: '', proporcion: 1 })
       await cargar()
       avisar('Serie creada')
     } catch (e) {
@@ -664,11 +693,14 @@ function TabSeries({ estacionamientoId, avisar, avisarError, esAdmin }: TabProps
     <div>
       <p style={{ color: '#666', fontSize: '0.85rem' }}>
         La proporción define el reparto entre series (ej. A=3, B=1 reparte 3:1). Los folios ya emitidos no cambian.
+        El marcador es el símbolo que sustituye a la letra en el folio IMPRESO del boleto (el SAT exige que el folio
+        sea el número real, sin cifrar, pero la letra tampoco se muestra directo) — único por estacionamiento.
       </p>
       <table style={{ borderCollapse: 'collapse', width: '100%' }}>
         <thead>
           <tr>
             <th style={thStyle}>Serie</th>
+            <th style={thStyle}>Marcador</th>
             <th style={thStyle}>Proporción</th>
             <th style={thStyle}>Emitidos</th>
             <th style={thStyle}>Activa</th>
@@ -681,6 +713,26 @@ function TabSeries({ estacionamientoId, avisar, avisarError, esAdmin }: TabProps
           {series.map((s) => (
             <tr key={s.id}>
               <td style={tdStyle}>{s.serie}</td>
+              <td style={tdStyle}>
+                <select
+                  style={{ ...inputStyle, width: 60 }}
+                  value={s.marcador ?? ''}
+                  onChange={(e) =>
+                    setSeries((prev) => prev.map((x) => (x.id === s.id ? { ...x, marcador: e.target.value } : x)))
+                  }
+                >
+                  {!s.marcador && <option value="">—</option>}
+                  {marcadoresLibres(series, s.id)
+                    .concat(s.marcador ? [s.marcador] : [])
+                    .sort()
+                    .filter((m, i, arr) => arr.indexOf(m) === i)
+                    .map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                </select>
+              </td>
               <td style={tdStyle}>
                 <input
                   style={{ ...inputStyle, width: 60 }}
@@ -747,6 +799,17 @@ function TabSeries({ estacionamientoId, avisar, avisarError, esAdmin }: TabProps
               value={nueva.serie}
               onChange={(e) => setNueva({ ...nueva, serie: e.target.value.toUpperCase().replace(/[^A-Z]/g, '') })}
             />
+            <select
+              style={{ ...inputStyle, width: 60 }}
+              value={nueva.marcador}
+              onChange={(e) => setNueva({ ...nueva, marcador: e.target.value })}
+            >
+              {marcadoresLibres(series, null).map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
             <input
               style={{ ...inputStyle, width: 70 }}
               type="number"
@@ -754,7 +817,7 @@ function TabSeries({ estacionamientoId, avisar, avisarError, esAdmin }: TabProps
               value={nueva.proporcion}
               onChange={(e) => setNueva({ ...nueva, proporcion: Number(e.target.value) })}
             />
-            <button onClick={crear} disabled={!nueva.serie.trim()}>
+            <button onClick={crear} disabled={!nueva.serie.trim() || !nueva.marcador}>
               Agregar serie
             </button>
           </div>

@@ -62,12 +62,12 @@ function cerrarBoletoConSerie(serie: string, monto = 40): number {
 
 function desactivarSerie(serie: string): void {
   const fila = listarSeries(db, estacionamientoId).find((s) => s.serie === serie)!
-  actualizarSerie(db, { id: fila.id, proporcion: fila.proporcion, activo: false })
+  actualizarSerie(db, { id: fila.id, marcador: fila.marcador!, proporcion: fila.proporcion, activo: false })
 }
 
 function activarSerie(serie: string): void {
   const fila = listarSeries(db, estacionamientoId).find((s) => s.serie === serie)!
-  actualizarSerie(db, { id: fila.id, proporcion: fila.proporcion, activo: true })
+  actualizarSerie(db, { id: fila.id, marcador: fila.marcador!, proporcion: fila.proporcion, activo: true })
 }
 
 function gastoEjemplo(overrides: Partial<Parameters<typeof registrarGasto>[1]> = {}) {

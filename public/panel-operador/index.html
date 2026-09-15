@@ -1046,6 +1046,10 @@
     const encabezadoSeries = document.createElement('h3')
     encabezadoSeries.textContent = 'Series de folio'
     elEditorContenido.appendChild(encabezadoSeries)
+    const notaSeries = document.createElement('p')
+    notaSeries.className = 'hint'
+    notaSeries.textContent = 'El marcador sustituye a la letra en el folio impreso del boleto — un símbolo corto y único (ej. "*", "#"), no la letra de la serie.'
+    elEditorContenido.appendChild(notaSeries)
 
     formActual.series.forEach((serie, i) => {
       const tarjeta = document.createElement('div')
@@ -1074,6 +1078,10 @@
         colSerie.innerHTML = `<label>Serie</label><div style="padding:0.4rem 0; font-weight:600;">${serie.serie}</div>`
       }
 
+      const colMarcador = document.createElement('div')
+      colMarcador.innerHTML = '<label>Marcador (símbolo del folio impreso, ej. "*")</label>'
+      colMarcador.appendChild(crearCampoTexto(serie.marcador || '', (v) => (formActual.series[i].marcador = v.trim())))
+
       const colProporcion = document.createElement('div')
       colProporcion.innerHTML = '<label>Proporción</label>'
       colProporcion.appendChild(crearCampoTexto(serie.proporcion, (v) => (formActual.series[i].proporcion = v), 'number'))
@@ -1092,6 +1100,7 @@
       colActivo.appendChild(crearCheckbox(serie.activo, (v) => (formActual.series[i].activo = v)))
 
       fila.appendChild(colSerie)
+      fila.appendChild(colMarcador)
       fila.appendChild(colProporcion)
       fila.appendChild(colFolio)
       fila.appendChild(colActivo)
@@ -1102,7 +1111,7 @@
     const btnAgregarSerie = document.createElement('button')
     btnAgregarSerie.textContent = '+ Agregar serie'
     btnAgregarSerie.addEventListener('click', () => {
-      formActual.series.push({ id: null, serie: '', proporcion: 1, activo: true, siguienteNumero: 1 })
+      formActual.series.push({ id: null, serie: '', marcador: '', proporcion: 1, activo: true, siguienteNumero: 1 })
       formSucio = true
       construirFormulario(formActual)
     })

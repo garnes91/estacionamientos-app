@@ -82,11 +82,11 @@
 
 <main id="formulario-caja" style="display:none;">
   <h1>Factura tu boleto de estacionamiento</h1>
-  <p class="subtitulo">Ingresa el folio impreso en tu ticket y tus datos fiscales. La factura (PDF y XML) se envía al correo que captures aquí.</p>
+  <p class="subtitulo">Ingresa el código de factura impreso en tu ticket y tus datos fiscales. La factura (PDF y XML) se envía al correo que captures aquí.</p>
 
   <form id="form">
-    <label for="codigoImpreso">Folio del ticket</label>
-    <input id="codigoImpreso" required placeholder="Como aparece impreso en tu boleto" />
+    <label for="codigoImpreso">Código de factura</label>
+    <input id="codigoImpreso" required placeholder="Como aparece impreso en tu recibo (ej. BOL-042817)" />
 
     <label for="rfc">RFC</label>
     <input id="rfc" required placeholder="XAXX010101000" style="text-transform: uppercase;" />
@@ -199,7 +199,7 @@
   // llamar a FacturAPI como si FacturAPI rechazó un dato — se muestra tal
   // cual, sin el prefijo genérico, para no repetir contexto de más.
   const MENSAJES_ERROR = {
-    'not-found': 'No encontramos ese folio. Revisa que lo hayas escrito tal cual aparece impreso — puede tardar unos minutos en aparecer disponible después de pagar.',
+    'not-found': 'No encontramos ese código. Revisa que lo hayas escrito tal cual aparece impreso — puede tardar unos minutos en aparecer disponible después de pagar.',
     'already-exists': 'Este boleto ya fue facturado. Si tú no lo hiciste, contacta al operador del estacionamiento.',
     'failed-precondition': 'Este estacionamiento no tiene la facturación configurada todavía. Contacta al operador.'
   }

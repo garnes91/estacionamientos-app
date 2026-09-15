@@ -3,17 +3,19 @@ import type { BoletoCerrado } from '../db/boletos'
 import { obtenerOCrearClaveFolio } from '../db/claveCifradoFolio'
 import { obtenerConfiguracionFacturacion } from '../db/configuracionFacturacion'
 import { obtenerConfiguracionMonitoreo } from '../db/configuracionMonitoreo'
-import { formatearFolio } from '../logic/folioBarcode'
+import { formatearCodigoFacturacionBoleto } from '../logic/folioBarcode'
 import { parchearDocumento } from './firestoreRest'
 
 /**
  * Sube un boleto recién cerrado a Firestore para que el portal público de
  * autofacturación individual (portal-facturacion/) y la pestaña de
  * facturación global del panel del operador (panel-operador/, fuera de
- * este repo) puedan encontrarlo por el mismo código que trae impreso el
- * ticket — la llave del documento es ese código (formatearFolio), no el
- * folio/serie internos, así ninguna de esas dos páginas necesita conocer
- * la clave de cifrado del estacionamiento.
+ * este repo) puedan encontrarlo por su código de facturación
+ * (formatearCodigoFacturacionBoleto) — la llave del documento es ese
+ * código, propio y desacoplado del folio impreso en el ticket (ese ahora
+ * es plano, por requisito del SAT; ver src/logic/folioBarcode.ts), así
+ * ninguna de esas dos páginas necesita conocer la clave de cifrado del
+ * estacionamiento.
  *
  * Reutiliza el mismo proyecto Firebase que ya usa el monitoreo/panel del
  * operador (configuracion_monitoreo) — decisión tomada al diseñar esta
@@ -36,15 +38,15 @@ export async function sincronizarBoletoCerrado(db: DB, estacionamientoId: number
 
   try {
     const claveFolio = obtenerOCrearClaveFolio(db, estacionamientoId)
-    const codigoImpreso = formatearFolio(boleto.serie, boleto.folio, claveFolio)
+    const codigoFactura = formatearCodigoFacturacionBoleto(boleto.id, claveFolio)
 
-    await parchearDocumento(firebase, `estacionamientos/${firebase.slug}/boletosFacturables/${codigoImpreso}`, {
+    await parchearDocumento(firebase, `estacionamientos/${firebase.slug}/boletosFacturables/${codigoFactura}`, {
       serie: { stringValue: boleto.serie },
-      // Folio REAL (sin cifrar) — solo para que la factura global lo
-      // muestre desglosado por boleto (ver crearFacturaGlobalMensual en el
-      // repo de Cloud Functions). No es sensible como el código cifrado de
-      // arriba: nunca se expone al público, solo va dentro del CFDI que
-      // recibe el dueño/contador.
+      // Folio REAL, plano (ya no se cifra, requisito SAT) — para que la
+      // factura global lo muestre desglosado por boleto (ver
+      // crearFacturaGlobalMensual en el repo de Cloud Functions). No es
+      // sensible: nunca se expone al público por este medio, solo va
+      // dentro del CFDI que recibe el dueño/contador.
       folio: { integerValue: String(boleto.folio) },
       monto: { doubleValue: boleto.monto },
       fecha: { timestampValue: boleto.horaSalida },

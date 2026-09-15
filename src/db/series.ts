@@ -1,10 +1,12 @@
 import type { DB } from './index'
 import { elegirSiguienteSerie, SerieFolioEstado } from '../logic/reparteSeries'
+import { MARCADOR_VALIDO, MARCADORES_DISPONIBLES } from '../logic/folioBarcode'
 
 interface SerieFolioRow {
   id: number
   estacionamiento_id: number
   serie: string
+  marcador: string | null
   proporcion: number
   siguiente_numero: number
   contador_emitidos: number
@@ -53,6 +55,7 @@ export function asignarSiguienteFolio(db: DB, estacionamientoId: number): FolioA
 export interface SerieFolioAdmin {
   id: number
   serie: string
+  marcador: string | null
   proporcion: number
   siguienteNumero: number
   contadorEmitidos: number
@@ -67,6 +70,7 @@ export function listarSeries(db: DB, estacionamientoId: number): SerieFolioAdmin
   return filas.map((f) => ({
     id: f.id,
     serie: f.serie,
+    marcador: f.marcador,
     proporcion: f.proporcion,
     siguienteNumero: f.siguiente_numero,
     contadorEmitidos: f.contador_emitidos,
@@ -74,14 +78,56 @@ export function listarSeries(db: DB, estacionamientoId: number): SerieFolioAdmin
   }))
 }
 
+/** Marcador que sustituye a la letra de esta serie en el folio impreso (ver formatearFolioImpreso). Ignora `activo`: una serie desactivada puede tener boletos abiertos que igual necesitan imprimirse/cobrarse. */
+export function obtenerMarcadorDeSerie(db: DB, estacionamientoId: number, serie: string): string | null {
+  const fila = db
+    .prepare<[number, string], { marcador: string | null }>(
+      'SELECT marcador FROM series_folio WHERE estacionamiento_id = ? AND serie = ?'
+    )
+    .get(estacionamientoId, serie)
+  return fila?.marcador ?? null
+}
+
+/** Inverso de obtenerMarcadorDeSerie — para resolver un folio escaneado (ver cobrarBoletoPorTextoEscaneado en src/db/boletos.ts). También ignora `activo`. */
+export function buscarSeriePorMarcador(db: DB, estacionamientoId: number, marcador: string): string | null {
+  const fila = db
+    .prepare<[number, string], { serie: string }>(
+      'SELECT serie FROM series_folio WHERE estacionamiento_id = ? AND marcador = ?'
+    )
+    .get(estacionamientoId, marcador)
+  return fila?.serie ?? null
+}
+
+function validarMarcador(db: DB, estacionamientoId: number, marcador: string, excluirId?: number): void {
+  if (!MARCADOR_VALIDO.test(marcador)) {
+    throw new Error(`El marcador debe ser uno de: ${MARCADORES_DISPONIBLES.join(' ')}`)
+  }
+  const fila = db
+    .prepare<[number, string], { id: number }>('SELECT id FROM series_folio WHERE estacionamiento_id = ? AND marcador = ?')
+    .get(estacionamientoId, marcador)
+  if (fila && fila.id !== excluirId) {
+    throw new Error(`El marcador "${marcador}" ya lo usa otra serie de este estacionamiento`)
+  }
+}
+
 export interface ActualizarSerieInput {
   id: number
+  marcador: string
   proporcion: number
   activo: boolean
 }
 
 export function actualizarSerie(db: DB, input: ActualizarSerieInput): void {
-  db.prepare('UPDATE series_folio SET proporcion = ?, activo = ? WHERE id = ?').run(
+  const fila = db
+    .prepare<[number], { estacionamiento_id: number }>('SELECT estacionamiento_id FROM series_folio WHERE id = ?')
+    .get(input.id)
+  if (!fila) {
+    throw new Error('No existe esa serie')
+  }
+  validarMarcador(db, fila.estacionamiento_id, input.marcador, input.id)
+
+  db.prepare('UPDATE series_folio SET marcador = ?, proporcion = ?, activo = ? WHERE id = ?').run(
+    input.marcador,
     input.proporcion,
     input.activo ? 1 : 0,
     input.id
@@ -91,13 +137,14 @@ export function actualizarSerie(db: DB, input: ActualizarSerieInput): void {
 export interface NuevaSerieInput {
   estacionamientoId: number
   serie: string
+  marcador: string
   proporcion: number
 }
 
-// Mismo alfabeto que espera parsearFolio() en src/logic/folioBarcode.ts, y lo
-// único que Code128 codifica sin problema: si se cuela un símbolo raro (ej.
-// "°"), JsBarcode revienta al imprimir el boleto. Se valida aquí, al crear,
-// para no descubrirlo hasta que alguien intente emitir con esa serie.
+// Mismo alfabeto que espera parsearFolioImpreso() en src/logic/folioBarcode.ts,
+// y lo único que Code128 codifica sin problema: si se cuela un símbolo raro
+// (ej. "°"), JsBarcode revienta al imprimir el boleto. Se valida aquí, al
+// crear, para no descubrirlo hasta que alguien intente emitir con esa serie.
 const SERIE_VALIDA = /^[A-Z]{1,3}$/
 
 export function crearSerie(db: DB, input: NuevaSerieInput): SerieFolioAdmin {
@@ -105,6 +152,7 @@ export function crearSerie(db: DB, input: NuevaSerieInput): SerieFolioAdmin {
   if (!SERIE_VALIDA.test(serie)) {
     throw new Error('La serie debe ser de 1 a 3 letras (A-Z), sin números, espacios ni símbolos')
   }
+  validarMarcador(db, input.estacionamientoId, input.marcador)
 
   // boletos.serie es texto suelto, no una referencia a esta tabla — si esta
   // letra ya se usó antes (una serie que se borró y se vuelve a crear),
@@ -119,10 +167,20 @@ export function crearSerie(db: DB, input: NuevaSerieInput): SerieFolioAdmin {
   const siguienteNumero = (maxFolio ?? 0) + 1
 
   const id = db
-    .prepare('INSERT INTO series_folio (estacionamiento_id, serie, proporcion, siguiente_numero) VALUES (?,?,?,?)')
-    .run(input.estacionamientoId, serie, input.proporcion, siguienteNumero).lastInsertRowid as number
+    .prepare(
+      'INSERT INTO series_folio (estacionamiento_id, serie, marcador, proporcion, siguiente_numero) VALUES (?,?,?,?,?)'
+    )
+    .run(input.estacionamientoId, serie, input.marcador, input.proporcion, siguienteNumero).lastInsertRowid as number
 
-  return { id, serie, proporcion: input.proporcion, siguienteNumero, contadorEmitidos: 0, activo: true }
+  return {
+    id,
+    serie,
+    marcador: input.marcador,
+    proporcion: input.proporcion,
+    siguienteNumero,
+    contadorEmitidos: 0,
+    activo: true
+  }
 }
 
 /**

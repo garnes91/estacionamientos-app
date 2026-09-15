@@ -15,6 +15,7 @@ interface TipoVehiculoAdminApi {
 interface BoletoEmitidoApi {
   id: number
   serie: string
+  marcador: string | null
   folio: number
   tipoVehiculoId: number
   horaEntrada: string
@@ -34,6 +35,7 @@ interface BoletoListadoApi {
 interface BoletoCerradoApi {
   id: number
   serie: string
+  marcador: string | null
   folio: number
   horaSalida: string
   minutosTotales: number
@@ -42,6 +44,7 @@ interface BoletoCerradoApi {
   excedenteMinutos?: number
   excedenteMonto?: number
   recargoBoletoPerdido?: number
+  codigoFactura?: string
 }
 
 interface UsuarioApi {
@@ -59,6 +62,7 @@ interface TarifaProgresivaAdminApi {
 interface SerieFolioAdminApi {
   id: number
   serie: string
+  marcador: string | null
   proporcion: number
   siguienteNumero: number
   contadorEmitidos: number
@@ -289,7 +293,6 @@ declare global {
         textoLegalBoleto: string | null
         cargoBoletoPerdido: number
         umbralRecobroSospechoso: number
-        claveFolio: string
         slugFacturacion: string | null
       }>
       login: (params: { nombreUsuario: string; password: string }) => Promise<UsuarioApi>
@@ -304,11 +307,11 @@ declare global {
         datosTicket?:
           | {
               variante: 'entrada'
-              claveFolio: string
               datos: {
                 estacionamientoNombre: string
                 textoBoleto: string | null
                 textoLegalBoleto: string | null
+                marcador: string | null
                 serie: string
                 folio: number
                 tipoVehiculo: string
@@ -319,11 +322,11 @@ declare global {
             }
           | {
               variante: 'cobro'
-              claveFolio: string
               datos: {
                 estacionamientoNombre: string
                 textoBoleto: string | null
                 textoLegalBoleto: string | null
+                marcador: string | null
                 serie: string
                 folio: number
                 tipoCobro: 'regular' | 'plana'
@@ -332,6 +335,7 @@ declare global {
                 excedenteMinutos?: number
                 excedenteMonto?: number
                 recargoBoletoPerdido?: number
+                codigoFactura?: string | null
                 slugFacturacion?: string | null
               }
             }
@@ -377,7 +381,6 @@ declare global {
             }
           | {
               variante: 'serie'
-              claveFolio: string
               datos: {
                 estacionamientoNombre: string
                 generadoPor: string
@@ -425,11 +428,7 @@ declare global {
       listarBoletosAbiertos: (estacionamientoId: number) => Promise<BoletoListadoApi[]>
       cerrarBoleto: (params: { estacionamientoId: number; boletoId: number }) => Promise<BoletoCerradoApi>
       cerrarBoletoPerdido: (params: { estacionamientoId: number; boletoId: number }) => Promise<BoletoCerradoApi>
-      cobrarBoletoPorFolio: (params: {
-        estacionamientoId: number
-        serie: string
-        folio: number
-      }) => Promise<BoletoCerradoApi>
+      cobrarBoletoEscaneado: (params: { estacionamientoId: number; texto: string }) => Promise<BoletoCerradoApi>
       resumen: (estacionamientoId: number) => Promise<ResumenApi>
       modoSoloSerieA: {
         estado: (estacionamientoId: number) => Promise<boolean>
@@ -496,8 +495,18 @@ declare global {
         }
         series: {
           listar: (estacionamientoId: number) => Promise<SerieFolioAdminApi[]>
-          actualizar: (params: { id: number; proporcion: number; activo: boolean }) => Promise<void>
-          crear: (params: { estacionamientoId: number; serie: string; proporcion: number }) => Promise<SerieFolioAdminApi>
+          actualizar: (params: {
+            id: number
+            marcador: string
+            proporcion: number
+            activo: boolean
+          }) => Promise<void>
+          crear: (params: {
+            estacionamientoId: number
+            serie: string
+            marcador: string
+            proporcion: number
+          }) => Promise<SerieFolioAdminApi>
           eliminar: (id: number) => Promise<void>
           establecerSiguienteNumero: (params: { id: number; siguienteNumero: number }) => Promise<void>
         }

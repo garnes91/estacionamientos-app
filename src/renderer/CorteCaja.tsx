@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
-import { formatearFolio } from '../logic/folioBarcode'
+import { formatearFolioPlano } from '../logic/folioBarcode'
 import { ReautenticarCorte } from './ReautenticarCorte'
 
 interface Corte {
@@ -76,7 +76,7 @@ function formatearFecha(iso: string): string {
   return new Date(iso).toLocaleString()
 }
 
-function TablaBoletos({ boletos, claveFolio }: { boletos: DetalleCorteBoleto[]; claveFolio: string }): ReactElement {
+function TablaBoletos({ boletos }: { boletos: DetalleCorteBoleto[] }): ReactElement {
   return (
     <table cellPadding={4} style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.9rem' }}>
       <thead>
@@ -91,7 +91,7 @@ function TablaBoletos({ boletos, claveFolio }: { boletos: DetalleCorteBoleto[]; 
       <tbody>
         {boletos.map((b) => (
           <tr key={b.id} style={{ borderBottom: '1px solid #eee' }}>
-            <td>{formatearFolio(b.serie, b.folio, claveFolio)}</td>
+            <td>{formatearFolioPlano(b.serie, b.folio)}</td>
             <td>{b.tipoVehiculo}</td>
             <td>{formatearFecha(b.horaEntrada)}</td>
             <td>{formatearFecha(b.horaSalida)}</td>
@@ -114,7 +114,6 @@ export function CorteCaja({
 }): ReactElement {
   const [estacionamientoId, setEstacionamientoId] = useState<number | null>(null)
   const [nombreEstacionamiento, setNombreEstacionamiento] = useState('')
-  const [claveFolio, setClaveFolio] = useState('')
   const [soloSerieA, setSoloSerieA] = useState(false)
   const [historial, setHistorial] = useState<Corte[]>([])
   const [detalleActual, setDetalleActual] = useState<DetalleCorte | null>(null)
@@ -135,7 +134,6 @@ export function CorteCaja({
     window.api.estacionamientoActual().then((e) => {
       setEstacionamientoId(e.id)
       setNombreEstacionamiento(e.nombre)
-      setClaveFolio(e.claveFolio)
       cargarHistorial(e.id).catch((err) => setError(String(err)))
       window.api.modoSoloSerieA.estado(e.id).then(setSoloSerieA)
     })
@@ -216,7 +214,6 @@ export function CorteCaja({
   function datosReporteSerie(s: DetalleCortePorSerie): DatosReporteCrudo {
     return {
       variante: 'serie',
-      claveFolio,
       datos: {
         estacionamientoNombre: nombreEstacionamiento,
         generadoPor: nombreUsuario,
@@ -451,7 +448,7 @@ export function CorteCaja({
                     Periodo: {formatearFecha(s.desde)} — {formatearFecha(s.hasta)}
                   </p>
                 )}
-                <TablaBoletos boletos={s.boletos} claveFolio={claveFolio} />
+                <TablaBoletos boletos={s.boletos} />
               </div>
             ))}
 
@@ -491,7 +488,7 @@ export function CorteCaja({
                       Periodo: {formatearFecha(s.desde)} — {formatearFecha(s.hasta)}
                     </p>
                     <p>Generado por: {nombreUsuario}</p>
-                    <TablaBoletos boletos={s.boletos} claveFolio={claveFolio} />
+                    <TablaBoletos boletos={s.boletos} />
                     <p style={{ fontWeight: 'bold', borderTop: '2px solid #333', paddingTop: '0.5rem' }}>
                       Total serie {s.serie}: {s.totalBoletos} boletos, ${s.totalMonto.toFixed(2)}
                     </p>

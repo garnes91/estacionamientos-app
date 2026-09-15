@@ -43,7 +43,7 @@ describe('alternarModoSoloSerieA', () => {
 
   it('al restaurar, no reactiva una serie que ya estaba desactivada antes de entrar al modo', () => {
     const serieB = listarSeries(db, estacionamientoId).find((s) => s.serie === 'B')!
-    actualizarSerie(db, { id: serieB.id, proporcion: serieB.proporcion, activo: false })
+    actualizarSerie(db, { id: serieB.id, marcador: serieB.marcador!, proporcion: serieB.proporcion, activo: false })
 
     alternarModoSoloSerieA(db, estacionamientoId)
     alternarModoSoloSerieA(db, estacionamientoId)
@@ -62,7 +62,7 @@ describe('alternarModoSoloSerieA', () => {
   })
 
   it('incluye una serie creada después de haber estado en modo normal', () => {
-    crearSerie(db, { estacionamientoId, serie: 'C', proporcion: 1 })
+    crearSerie(db, { estacionamientoId, serie: 'C', marcador: '+', proporcion: 1 })
     alternarModoSoloSerieA(db, estacionamientoId)
     alternarModoSoloSerieA(db, estacionamientoId)
 

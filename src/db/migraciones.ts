@@ -1,4 +1,5 @@
 import type { DB } from './index'
+import { MARCADORES_DISPONIBLES } from '../logic/folioBarcode'
 
 /**
  * `CREATE TABLE IF NOT EXISTS` en schema.sql no agrega columnas a una tabla
@@ -64,6 +65,8 @@ export function migrarColumnasFaltantes(db: DB): void {
   quitarColumnaSiExiste(db, 'configuracion_facturacion', 'clave_unidad')
   quitarColumnaSiExiste(db, 'configuracion_facturacion', 'descripcion_servicio')
   ampliarRolUsuariosSiHaceFalta(db)
+  agregarColumnaSiFalta(db, 'series_folio', 'marcador', 'marcador TEXT')
+  backfillMarcadoresSiFalta(db)
 }
 
 function tablaExiste(db: DB, tabla: string): boolean {
@@ -145,5 +148,44 @@ export function ampliarRolUsuariosSiHaceFalta(db: DB): void {
     }
   } finally {
     db.pragma('foreign_keys = ON')
+  }
+}
+
+/**
+ * A instalaciones existentes: asigna un marcador único (del mismo pool
+ * curado que usa crearSerie, ver src/db/series.ts) a cada serie que
+ * todavía no tiene uno — sin esto, series ya creadas antes de este cambio
+ * se quedarían sin poder imprimir su folio. Se agrupa por
+ * estacionamiento_id para no repetir marcador dentro del mismo
+ * estacionamiento (sí puede repetirse entre estacionamientos distintos,
+ * cada uno tiene su propio espacio de marcadores).
+ */
+export function backfillMarcadoresSiFalta(db: DB): void {
+  if (!tablaExiste(db, 'series_folio')) return
+
+  const estacionamientos = db
+    .prepare('SELECT DISTINCT estacionamiento_id AS id FROM series_folio')
+    .all() as { id: number }[]
+
+  for (const { id: estacionamientoId } of estacionamientos) {
+    const filas = db
+      .prepare<[number], { id: number; marcador: string | null }>(
+        'SELECT id, marcador FROM series_folio WHERE estacionamiento_id = ? ORDER BY id'
+      )
+      .all(estacionamientoId)
+
+    const usados = new Set(filas.map((f) => f.marcador).filter((m): m is string => m != null))
+    const disponibles = MARCADORES_DISPONIBLES.filter((m) => !usados.has(m))
+
+    for (const fila of filas) {
+      if (fila.marcador != null) continue
+      const siguiente = disponibles.shift()
+      if (!siguiente) {
+        throw new Error(
+          `No hay suficientes marcadores disponibles para asignar automáticamente a todas las series del estacionamiento ${estacionamientoId} — hay más series que símbolos en el pool.`
+        )
+      }
+      db.prepare('UPDATE series_folio SET marcador = ? WHERE id = ?').run(siguiente, fila.id)
+    }
   }
 }

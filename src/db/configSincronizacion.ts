@@ -36,6 +36,7 @@ export interface ConfigTarifaPlanaSync {
 export interface ConfigSerieSync {
   id: number | null
   serie: string
+  marcador: string
   proporcion: number
   activo: boolean
   siguienteNumero: number
@@ -94,6 +95,7 @@ export function construirConfigSincronizable(db: DB, estacionamientoId: number):
   const series = listarSeries(db, estacionamientoId).map((s) => ({
     id: s.id,
     serie: s.serie,
+    marcador: s.marcador ?? '',
     proporcion: s.proporcion,
     activo: s.activo,
     siguienteNumero: s.siguienteNumero
@@ -269,7 +271,7 @@ export function aplicarConfigSincronizable(
   for (const s of config.series) {
     if (s.id !== null) continue
     try {
-      crearSerie(db, { estacionamientoId, serie: s.serie, proporcion: s.proporcion })
+      crearSerie(db, { estacionamientoId, serie: s.serie, marcador: s.marcador, proporcion: s.proporcion })
     } catch (error) {
       errores.push(`Serie "${s.serie}": ${mensajeError(error)}`)
     }
@@ -288,7 +290,7 @@ export function aplicarConfigSincronizable(
   for (const s of config.series) {
     if (s.id === null || s.eliminar) continue
     if (!seriesActuales.some((x) => x.id === s.id)) continue
-    actualizarSerie(db, { id: s.id, proporcion: s.proporcion, activo: s.activo })
+    actualizarSerie(db, { id: s.id, marcador: s.marcador, proporcion: s.proporcion, activo: s.activo })
 
     try {
       establecerSiguienteNumero(db, s.id, s.siguienteNumero)

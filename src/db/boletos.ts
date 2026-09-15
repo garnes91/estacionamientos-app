@@ -1,8 +1,9 @@
 import type { DB } from './index'
-import { asignarSiguienteFolio } from './series'
+import { asignarSiguienteFolio, buscarSeriePorMarcador } from './series'
 import { obtenerTarifaProgresiva, obtenerTarifaPlana } from './tarifas'
 import { obtenerInicioPeriodoActual } from './cortes'
 import { calcularCobro } from '../logic/motorTarifas'
+import { parsearFolioImpreso } from '../logic/folioBarcode'
 
 export interface NuevoBoletoInput {
   estacionamientoId: number
@@ -366,6 +367,37 @@ export function cobrarBoletoPorFolio(db: DB, input: CobroPorFolioInput): BoletoC
   }
 
   throw new Error(`No existe ningún boleto con folio ${input.serie}-${input.folio} en este estacionamiento.`)
+}
+
+export interface CobroPorTextoEscaneadoInput {
+  estacionamientoId: number
+  texto: string
+  usuarioCobroId: number
+}
+
+/**
+ * Resuelve el texto crudo que entrega el escáner (marcador+folio, ver
+ * formatearFolioImpreso/parsearFolioImpreso en src/logic/folioBarcode.ts)
+ * a serie+folio consultando qué serie tiene ese marcador, y cobra igual
+ * que cobrarBoletoPorFolio. El parseo/resolución de marcador vive aquí (no
+ * en el renderer) porque necesita la base de datos — el renderer nunca
+ * conoce el mapeo marcador→serie.
+ */
+export function cobrarBoletoPorTextoEscaneado(db: DB, input: CobroPorTextoEscaneadoInput): BoletoCerrado {
+  const parseado = parsearFolioImpreso(input.texto)
+  if (!parseado) {
+    throw new Error(`"${input.texto}" no tiene el formato de un folio (ej. *000184)`)
+  }
+  const serie = buscarSeriePorMarcador(db, input.estacionamientoId, parseado.marcador)
+  if (!serie) {
+    throw new Error(`No existe ninguna serie con el marcador "${parseado.marcador}" en este estacionamiento.`)
+  }
+  return cobrarBoletoPorFolio(db, {
+    estacionamientoId: input.estacionamientoId,
+    serie,
+    folio: parseado.folio,
+    usuarioCobroId: input.usuarioCobroId
+  })
 }
 
 export interface DetalleIntentoRecobro {

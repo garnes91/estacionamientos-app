@@ -38,15 +38,17 @@ export function sembrarSiVacio(db: DB): void {
   insertarUsuario.run(estacionamientoId, 'admin', hashPassword('admin'), 'Administrador', 'admin')
   insertarUsuario.run(estacionamientoId, 'empleado', hashPassword('empleado'), 'Empleado de prueba', 'empleado')
 
-  db.prepare('INSERT INTO series_folio (estacionamiento_id, serie, proporcion) VALUES (?,?,?)').run(
+  db.prepare('INSERT INTO series_folio (estacionamiento_id, serie, proporcion, marcador) VALUES (?,?,?,?)').run(
     estacionamientoId,
     'A',
-    3
+    3,
+    '*'
   )
-  db.prepare('INSERT INTO series_folio (estacionamiento_id, serie, proporcion) VALUES (?,?,?)').run(
+  db.prepare('INSERT INTO series_folio (estacionamiento_id, serie, proporcion, marcador) VALUES (?,?,?,?)').run(
     estacionamientoId,
     'B',
-    1
+    1,
+    '#'
   )
 
   const insertarTipo = db.prepare('INSERT INTO tipos_vehiculo (estacionamiento_id, nombre, orden) VALUES (?,?,?)')

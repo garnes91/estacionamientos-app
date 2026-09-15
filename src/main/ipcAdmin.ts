@@ -114,16 +114,19 @@ export function registrarIpcAdmin(): void {
     return listarSeries(obtenerDb(), estacionamientoId)
   })
 
-  // Proporción de reparto y activar/desactivar — no crear/eliminar series
-  // ni establecer el siguiente folio (ver requerirSupervisorOAdmin).
-  ipcMain.handle('admin:series:actualizar', (_evento, params: { id: number; proporcion: number; activo: boolean }) => {
-    requerirSupervisorOAdmin()
-    actualizarSerie(obtenerDb(), params)
-  })
+  // Marcador, proporción de reparto y activar/desactivar — no crear/eliminar
+  // series ni establecer el siguiente folio (ver requerirSupervisorOAdmin).
+  ipcMain.handle(
+    'admin:series:actualizar',
+    (_evento, params: { id: number; marcador: string; proporcion: number; activo: boolean }) => {
+      requerirSupervisorOAdmin()
+      actualizarSerie(obtenerDb(), params)
+    }
+  )
 
   ipcMain.handle(
     'admin:series:crear',
-    (_evento, params: { estacionamientoId: number; serie: string; proporcion: number }) => {
+    (_evento, params: { estacionamientoId: number; serie: string; marcador: string; proporcion: number }) => {
       requerirAdmin()
       return crearSerie(obtenerDb(), params)
     }

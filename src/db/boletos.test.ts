@@ -4,11 +4,14 @@ import { sembrarSiVacio } from './seed'
 import { actualizarCargoBoletoPerdido, actualizarUmbralRecobroSospechoso, obtenerEstacionamientoActual } from './estacionamientos'
 import { obtenerUsuarioPorDefecto } from './usuarios'
 import { listarTiposVehiculo } from './tiposVehiculo'
+import { obtenerMarcadorDeSerie } from './series'
+import { formatearFolioImpreso } from '../logic/folioBarcode'
 import {
   buscarBoletoAbiertoPorFolio,
   cerrarBoleto,
   cerrarBoletoPerdido,
   cobrarBoletoPorFolio,
+  cobrarBoletoPorTextoEscaneado,
   emitirBoleto,
   listarBoletosAbiertos,
   obtenerDetalleIntentoRecobro,
@@ -320,6 +323,51 @@ describe('cobrarBoletoPorFolio', () => {
       n: number
     }
     expect(n).toBe(0)
+  })
+})
+
+describe('cobrarBoletoPorTextoEscaneado', () => {
+  it('resuelve el marcador escaneado a la serie correcta y cobra igual que cobrarBoletoPorFolio', () => {
+    const emitido = emitirBoleto(db, { estacionamientoId, tipoVehiculoId: tipoAutoId, usuarioEmisionId: usuarioId })
+    backdatar(db, emitido.id, 60)
+    const marcador = obtenerMarcadorDeSerie(db, estacionamientoId, emitido.serie)!
+
+    const cierre = cobrarBoletoPorTextoEscaneado(db, {
+      estacionamientoId,
+      texto: formatearFolioImpreso(marcador, emitido.serie, emitido.folio),
+      usuarioCobroId: usuarioId
+    })
+
+    expect(cierre.id).toBe(emitido.id)
+    expect(cierre.monto).toBe(40)
+  })
+
+  it('lanza un error de formato claro si el texto no tiene forma de folio', () => {
+    expect(() =>
+      cobrarBoletoPorTextoEscaneado(db, { estacionamientoId, texto: 'no-es-un-folio', usuarioCobroId: usuarioId })
+    ).toThrow('no tiene el formato de un folio')
+  })
+
+  it('lanza error si el marcador no corresponde a ninguna serie de este estacionamiento', () => {
+    expect(() =>
+      cobrarBoletoPorTextoEscaneado(db, { estacionamientoId, texto: '~000001', usuarioCobroId: usuarioId })
+    ).toThrow('No existe ninguna serie con el marcador')
+  })
+
+  it('produce el mismo comportamiento de recobro sospechoso que cobrarBoletoPorFolio en un re-escaneo', () => {
+    const emitido = emitirBoleto(db, { estacionamientoId, tipoVehiculoId: tipoAutoId, usuarioEmisionId: usuarioId })
+    const marcador = obtenerMarcadorDeSerie(db, estacionamientoId, emitido.serie)!
+    const texto = formatearFolioImpreso(marcador, emitido.serie, emitido.folio)
+
+    cobrarBoletoPorTextoEscaneado(db, { estacionamientoId, texto, usuarioCobroId: usuarioId })
+    expect(() => cobrarBoletoPorTextoEscaneado(db, { estacionamientoId, texto, usuarioCobroId: usuarioId })).toThrow()
+
+    try {
+      cobrarBoletoPorTextoEscaneado(db, { estacionamientoId, texto, usuarioCobroId: usuarioId })
+      expect.unreachable()
+    } catch (e) {
+      expect(e).toBeInstanceOf(RecobroSospechosoError)
+    }
   })
 })
 

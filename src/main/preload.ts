@@ -32,11 +32,11 @@ contextBridge.exposeInMainWorld('api', {
     datosTicket?:
       | {
           variante: 'entrada'
-          claveFolio: string
           datos: {
             estacionamientoNombre: string
             textoBoleto: string | null
             textoLegalBoleto: string | null
+            marcador: string | null
             serie: string
             folio: number
             tipoVehiculo: string
@@ -47,11 +47,11 @@ contextBridge.exposeInMainWorld('api', {
         }
       | {
           variante: 'cobro'
-          claveFolio: string
           datos: {
             estacionamientoNombre: string
             textoBoleto: string | null
             textoLegalBoleto: string | null
+            marcador: string | null
             serie: string
             folio: number
             tipoCobro: 'regular' | 'plana'
@@ -60,6 +60,7 @@ contextBridge.exposeInMainWorld('api', {
             excedenteMinutos?: number
             excedenteMonto?: number
             recargoBoletoPerdido?: number
+            codigoFactura?: string | null
             slugFacturacion?: string | null
           }
         }
@@ -110,7 +111,6 @@ contextBridge.exposeInMainWorld('api', {
         }
       | {
           variante: 'serie'
-          claveFolio: string
           datos: {
             estacionamientoNombre: string
             generadoPor: string
@@ -161,8 +161,8 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('boletos:cerrar', params),
   cerrarBoletoPerdido: (params: { estacionamientoId: number; boletoId: number }) =>
     ipcRenderer.invoke('boletos:cerrarPerdido', params),
-  cobrarBoletoPorFolio: (params: { estacionamientoId: number; serie: string; folio: number }) =>
-    ipcRenderer.invoke('boletos:cobrarPorFolio', params),
+  cobrarBoletoEscaneado: (params: { estacionamientoId: number; texto: string }) =>
+    ipcRenderer.invoke('boletos:cobrarEscaneado', params),
   resumen: (estacionamientoId: number) => ipcRenderer.invoke('boletos:resumen', estacionamientoId),
   modoSoloSerieA: {
     estado: (estacionamientoId: number) => ipcRenderer.invoke('modoSoloSerieA:estado', estacionamientoId),
@@ -234,9 +234,9 @@ contextBridge.exposeInMainWorld('api', {
     },
     series: {
       listar: (estacionamientoId: number) => ipcRenderer.invoke('admin:series:listar', estacionamientoId),
-      actualizar: (params: { id: number; proporcion: number; activo: boolean }) =>
+      actualizar: (params: { id: number; marcador: string; proporcion: number; activo: boolean }) =>
         ipcRenderer.invoke('admin:series:actualizar', params),
-      crear: (params: { estacionamientoId: number; serie: string; proporcion: number }) =>
+      crear: (params: { estacionamientoId: number; serie: string; marcador: string; proporcion: number }) =>
         ipcRenderer.invoke('admin:series:crear', params),
       eliminar: (id: number) => ipcRenderer.invoke('admin:series:eliminar', id),
       establecerSiguienteNumero: (params: { id: number; siguienteNumero: number }) =>

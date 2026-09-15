@@ -207,8 +207,9 @@ export const crearFacturaGlobalMensual = onRequest({ cors: true }, async (req, r
       items: boletosAFacturar.map((boleto) => ({
         quantity: 1,
         product: {
-          // Folio REAL (sin cifrar) — a diferencia del código que trae
-          // impreso el boleto (ese sí cifrado, por antifraude), aquí no
+          // Folio REAL (ya no se cifra, requisito SAT) — a diferencia del
+          // código de facturación (ese sí cifrado, ver
+          // formatearCodigoFacturacionBoleto en el repo de la app), aquí no
           // hay riesgo: este texto solo lo ve el dueño/contador dentro del
           // CFDI, nunca el cliente.
           description:

@@ -77,16 +77,16 @@ async function abrirVentanaConHtml(html: string, tipo: TipoImpresion): Promise<B
  * y se usa `html` como siempre.
  */
 type DatosTicket =
-  | { variante: 'entrada'; claveFolio: string; datos: Parameters<typeof construirTicketEntrada>[0] }
-  | { variante: 'cobro'; claveFolio: string; datos: Parameters<typeof construirTicketCobro>[0] }
+  | { variante: 'entrada'; datos: Parameters<typeof construirTicketEntrada>[0] }
+  | { variante: 'cobro'; datos: Parameters<typeof construirTicketCobro>[0] }
   | { variante: 'pensionado'; datos: Parameters<typeof construirTicketPensionado>[0] }
 
 function construirBufferTicket(datosTicket: DatosTicket): Buffer {
   switch (datosTicket.variante) {
     case 'entrada':
-      return construirTicketEntrada(datosTicket.datos, datosTicket.claveFolio)
+      return construirTicketEntrada(datosTicket.datos)
     case 'cobro':
-      return construirTicketCobro(datosTicket.datos, datosTicket.claveFolio)
+      return construirTicketCobro(datosTicket.datos)
     case 'pensionado':
       return construirTicketPensionado(datosTicket.datos)
   }
@@ -98,7 +98,7 @@ function construirBufferTicket(datosTicket: DatosTicket): Buffer {
 // (ver construirReporteCorteSerie en src/main/escpos.ts).
 type DatosReporte =
   | { variante: 'general'; datos: Parameters<typeof construirReporteCorte>[0] }
-  | { variante: 'serie'; claveFolio: string; datos: Parameters<typeof construirReporteCorteSerie>[0] }
+  | { variante: 'serie'; datos: Parameters<typeof construirReporteCorteSerie>[0] }
   | { variante: 'mensual'; datos: Parameters<typeof construirReporteCorteMensual>[0] }
 
 function construirBufferReporte(datosReporte: DatosReporte): Buffer {
@@ -106,7 +106,7 @@ function construirBufferReporte(datosReporte: DatosReporte): Buffer {
     case 'general':
       return construirReporteCorte(datosReporte.datos)
     case 'serie':
-      return construirReporteCorteSerie(datosReporte.datos, datosReporte.claveFolio)
+      return construirReporteCorteSerie(datosReporte.datos)
     case 'mensual':
       return construirReporteCorteMensual(datosReporte.datos)
   }

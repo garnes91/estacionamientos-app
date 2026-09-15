@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
-import { parsearFolio } from '../logic/folioBarcode'
+import { parsearFolioImpreso } from '../logic/folioBarcode'
 import { BoletoImprimible, DatosBoletoImprimible } from './BoletoImprimible'
 import { ReciboCobro, DatosReciboCobro } from './ReciboCobro'
 import { ConfirmModal } from './ConfirmModal'
@@ -74,8 +74,8 @@ export function OperacionBoletos({
   const [nombreEstacionamiento, setNombreEstacionamiento] = useState('')
   const [textoBoleto, setTextoBoleto] = useState<string | null>(null)
   const [textoLegalBoleto, setTextoLegalBoleto] = useState<string | null>(null)
-  const [claveFolio, setClaveFolio] = useState('')
   const [slugFacturacion, setSlugFacturacion] = useState<string | null>(null)
+  const [codigoFactura, setCodigoFactura] = useState<string | null>(null)
   const [tipos, setTipos] = useState<TipoVehiculo[]>([])
   const [tarifasPlanas, setTarifasPlanas] = useState<TarifaPlana[]>([])
   const [placa, setPlaca] = useState('')
@@ -111,7 +111,6 @@ export function OperacionBoletos({
       setNombreEstacionamiento(estacionamiento.nombre)
       setTextoBoleto(estacionamiento.textoBoleto)
       setTextoLegalBoleto(estacionamiento.textoLegalBoleto)
-      setClaveFolio(estacionamiento.claveFolio)
       setSlugFacturacion(estacionamiento.slugFacturacion)
 
       const tiposVehiculo = await window.api.listarTiposVehiculo(estacionamiento.id)
@@ -149,6 +148,7 @@ export function OperacionBoletos({
         estacionamientoNombre: nombreEstacionamiento,
         textoBoleto,
         textoLegalBoleto,
+        marcador: emitido.marcador,
         serie: emitido.serie,
         folio: emitido.folio,
         tipoVehiculo: tipos.find((t) => t.id === tipoVehiculoId)?.nombre ?? '',
@@ -213,17 +213,19 @@ export function OperacionBoletos({
     return () => window.removeEventListener('keydown', onKeyDownSoloSerieA)
   }, [estacionamientoId, cambiandoSoloSerieA])
 
-  async function cobrarFolio(parseado: { serie: string; folio: number }, deEscaneoGlobal = false): Promise<void> {
+  async function cobrarTexto(texto: string, deEscaneoGlobal = false): Promise<void> {
     if (!estacionamientoId) return
     setCobrandoEscaneo(true)
     setError(null)
     try {
-      const cierre = await window.api.cobrarBoletoPorFolio({ estacionamientoId, ...parseado })
+      const cierre = await window.api.cobrarBoletoEscaneado({ estacionamientoId, texto })
       justoCobradoRef.current = true
+      setCodigoFactura(cierre.codigoFactura ?? null)
       setUltimoCobro({
         estacionamientoNombre: nombreEstacionamiento,
         textoBoleto,
         textoLegalBoleto,
+        marcador: cierre.marcador,
         serie: cierre.serie,
         folio: cierre.folio,
         tipoCobro: cierre.tipoCobro,
@@ -257,7 +259,7 @@ export function OperacionBoletos({
       await window.api.imprimir({
         html: elemento.outerHTML,
         tipo: 'ticket',
-        datosTicket: { variante: 'cobro', claveFolio, datos: { ...ultimoCobro, slugFacturacion } }
+        datosTicket: { variante: 'cobro', datos: { ...ultimoCobro, codigoFactura, slugFacturacion } }
       })
     } catch (e) {
       setError(limpiarError(e))
@@ -277,12 +279,11 @@ export function OperacionBoletos({
 
   async function cobrarEscaneado(): Promise<void> {
     if (!folioEscaneado.trim()) return
-    const parseado = parsearFolio(folioEscaneado, claveFolio)
-    if (!parseado) {
-      setError(`"${folioEscaneado}" no tiene el formato de un folio (ej. 04837211)`)
+    if (!parsearFolioImpreso(folioEscaneado)) {
+      setError(`"${folioEscaneado}" no tiene el formato de un folio (ej. *000184)`)
       return
     }
-    await cobrarFolio(parseado)
+    await cobrarTexto(folioEscaneado)
   }
 
   // Cobro automático por escaneo sin importar dónde esté el cursor: un
@@ -329,12 +330,11 @@ export function OperacionBoletos({
         // ráfaga, su propio onKeyDown (más abajo) ya se encarga de cobrar —
         // hacerlo también aquí duplicaría el cobro.
         if (transcurrido < UMBRAL_ESCANEO_MS && elementoAlIniciarRef.current !== folioInputRef.current) {
-          const parseado = parsearFolio(buffer, claveFolio)
-          if (parseado) {
-            cobrarFolio(parseado, true)
+          if (parsearFolioImpreso(buffer)) {
+            cobrarTexto(buffer, true)
           } else {
             // No fue un folio válido (lectura parcial, código dañado, etc.)
-            // — cobrarFolio no se ejecuta, así que nadie más va a limpiar el
+            // — cobrarTexto no se ejecuta, así que nadie más va a limpiar el
             // residuo que dejó el primer carácter del escaneo en "placa".
             setPlaca(placaAntesRef.current)
           }
@@ -361,7 +361,7 @@ export function OperacionBoletos({
     }
     window.addEventListener('keydown', alTecladoGlobal)
     return () => window.removeEventListener('keydown', alTecladoGlobal)
-  }, [estacionamientoId, claveFolio, placa])
+  }, [estacionamientoId, placa])
 
   async function cerrarSesion(): Promise<void> {
     await window.api.logout()
@@ -375,7 +375,7 @@ export function OperacionBoletos({
       await window.api.imprimir({
         html: elemento.outerHTML,
         tipo: 'ticket',
-        datosTicket: { variante: 'entrada', claveFolio, datos: ultimoEmitido }
+        datosTicket: { variante: 'entrada', datos: ultimoEmitido }
       })
     } catch (e) {
       setError(limpiarError(e))
@@ -506,7 +506,7 @@ export function OperacionBoletos({
           <input
             ref={folioInputRef}
             type="text"
-            placeholder="Escanear o escribir folio, ej. 04837211"
+            placeholder="Escanear o escribir folio, ej. *000184"
             value={folioEscaneado}
             onChange={(e) => setFolioEscaneado(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && cobrarEscaneado()}
@@ -524,7 +524,7 @@ export function OperacionBoletos({
         </div>
         {ultimoEmitido ? (
           <div style={{ border: '1px solid #e2e0da', borderRadius: 8, padding: '1rem', boxSizing: 'border-box' }}>
-            <BoletoImprimible datos={ultimoEmitido} claveFolio={claveFolio} />
+            <BoletoImprimible datos={ultimoEmitido} />
           </div>
         ) : (
           <div
@@ -555,7 +555,7 @@ export function OperacionBoletos({
         </div>
         {ultimoCobro ? (
           <div style={{ border: '1px solid #e2e0da', borderRadius: 8, padding: '1rem', boxSizing: 'border-box' }}>
-            <ReciboCobro datos={ultimoCobro} claveFolio={claveFolio} slugFacturacion={slugFacturacion} />
+            <ReciboCobro datos={ultimoCobro} codigoFactura={codigoFactura} slugFacturacion={slugFacturacion} />
           </div>
         ) : (
           <div

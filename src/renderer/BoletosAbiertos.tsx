@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
-import { formatearFolio } from '../logic/folioBarcode'
+import { formatearFolioPlano } from '../logic/folioBarcode'
 import { ReciboCobro, DatosReciboCobro } from './ReciboCobro'
 import { ConfirmModal } from './ConfirmModal'
 
@@ -20,8 +20,8 @@ export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactEl
   const [textoBoleto, setTextoBoleto] = useState<string | null>(null)
   const [textoLegalBoleto, setTextoLegalBoleto] = useState<string | null>(null)
   const [cargoBoletoPerdido, setCargoBoletoPerdido] = useState(0)
-  const [claveFolio, setClaveFolio] = useState('')
   const [slugFacturacion, setSlugFacturacion] = useState<string | null>(null)
+  const [codigoFactura, setCodigoFactura] = useState<string | null>(null)
   const [boletos, setBoletos] = useState<BoletoListado[]>([])
   const [cobrandoId, setCobrandoId] = useState<number | null>(null)
   const [ultimoCobro, setUltimoCobro] = useState<DatosReciboCobro | null>(null)
@@ -41,7 +41,6 @@ export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactEl
       setTextoBoleto(e.textoBoleto)
       setTextoLegalBoleto(e.textoLegalBoleto)
       setCargoBoletoPerdido(e.cargoBoletoPerdido)
-      setClaveFolio(e.claveFolio)
       setSlugFacturacion(e.slugFacturacion)
       cargar(e.id).catch((err) => setError(String(err)))
     })
@@ -54,7 +53,7 @@ export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactEl
       await window.api.imprimir({
         html: elemento.outerHTML,
         tipo: 'ticket',
-        datosTicket: { variante: 'cobro', claveFolio, datos: { ...ultimoCobro, slugFacturacion } }
+        datosTicket: { variante: 'cobro', datos: { ...ultimoCobro, codigoFactura, slugFacturacion } }
       })
     } catch (e) {
       setError(String(e))
@@ -76,10 +75,12 @@ export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactEl
         ? await window.api.cerrarBoletoPerdido({ estacionamientoId, boletoId })
         : await window.api.cerrarBoleto({ estacionamientoId, boletoId })
       justoCobradoRef.current = true
+      setCodigoFactura(cierre.codigoFactura ?? null)
       setUltimoCobro({
         estacionamientoNombre: nombreEstacionamiento,
         textoBoleto,
         textoLegalBoleto,
+        marcador: cierre.marcador,
         serie: cierre.serie,
         folio: cierre.folio,
         tipoCobro: cierre.tipoCobro,
@@ -123,7 +124,7 @@ export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactEl
           </thead>
           <tbody>
             {boletos.map((b) => {
-              const folioTexto = formatearFolio(b.serie, b.folio, claveFolio)
+              const folioTexto = formatearFolioPlano(b.serie, b.folio)
               return (
                 <tr key={b.id} style={{ borderBottom: '1px solid #eee' }}>
                   <td>{folioTexto}</td>
@@ -161,7 +162,7 @@ export function BoletosAbiertos({ onVolver }: { onVolver: () => void }): ReactEl
         </div>
         {ultimoCobro ? (
           <div style={{ border: '1px solid #e2e0da', borderRadius: 8, padding: '1rem', boxSizing: 'border-box' }}>
-            <ReciboCobro datos={ultimoCobro} claveFolio={claveFolio} slugFacturacion={slugFacturacion} />
+            <ReciboCobro datos={ultimoCobro} codigoFactura={codigoFactura} slugFacturacion={slugFacturacion} />
           </div>
         ) : (
           <div
